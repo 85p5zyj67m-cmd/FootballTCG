@@ -51,7 +51,6 @@ body {
 
 .pitch {
   display: grid;
-  grid-template-columns: repeat(5, var(--cell-size));
   border: 3px solid var(--line-color);
   background: var(--grass-dark);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -71,7 +70,6 @@ body {
 }
 
 .goal-zone {
-  grid-column: 3 / 4;
   background: repeating-linear-gradient(
     45deg,
     rgba(255, 255, 255, 0.12),

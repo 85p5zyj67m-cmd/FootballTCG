@@ -1,14 +1,16 @@
 // Spielseitenlayout: erzeugt und aktualisiert das DOM auf Basis des
 // Spielzustands aus gameLogic.js. Enthaelt selbst keine Spielregeln.
 
-import { SIDE } from "./gameLogic.js";
+import { SIDE, GOAL_COLUMN } from "./gameLogic.js";
 
 export function renderPitch(container, gameState) {
   container.innerHTML = "";
+  container.style.gridTemplateColumns = `repeat(${gameState.cols}, var(--cell-size))`;
   container.style.gridTemplateRows = `var(--goal-depth) repeat(${gameState.rows}, var(--cell-size)) var(--goal-depth)`;
 
   const goalTop = document.createElement("div");
   goalTop.className = "goal-zone top";
+  goalTop.style.gridColumn = `${GOAL_COLUMN} / ${GOAL_COLUMN + 1}`;
   container.appendChild(goalTop);
 
   const halfwayRow = Math.ceil(gameState.rows / 2);
@@ -30,6 +32,7 @@ export function renderPitch(container, gameState) {
 
   const goalBottom = document.createElement("div");
   goalBottom.className = "goal-zone bottom";
+  goalBottom.style.gridColumn = `${GOAL_COLUMN} / ${GOAL_COLUMN + 1}`;
   container.appendChild(goalBottom);
 }
 
