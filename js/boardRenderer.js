@@ -61,6 +61,38 @@ export function fitPitchToViewport(wrapperEl, gameState) {
   document.documentElement.style.setProperty("--goal-depth", `${cellSize * GOAL_DEPTH_RATIO}px`);
 }
 
+export function renderPieces(container, gameState) {
+  container.querySelectorAll(".piece").forEach((el) => el.remove());
+  container.querySelectorAll(".cell.crowded").forEach((el) => el.classList.remove("crowded"));
+
+  const piecesByCell = new Map();
+  for (const piece of gameState.pieces) {
+    const key = `${piece.row},${piece.col}`;
+    if (!piecesByCell.has(key)) {
+      piecesByCell.set(key, []);
+    }
+    piecesByCell.get(key).push(piece);
+  }
+
+  for (const [key, pieces] of piecesByCell) {
+    const [row, col] = key.split(",");
+    const cell = container.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    if (!cell) continue;
+
+    if (pieces.length > 1) {
+      cell.classList.add("crowded");
+    }
+
+    for (const piece of pieces) {
+      const token = document.createElement("div");
+      token.className = `piece team-${piece.side}`;
+      token.dataset.pieceId = piece.id;
+      token.textContent = piece.id.split("-")[1];
+      cell.appendChild(token);
+    }
+  }
+}
+
 export function renderTurnIndicator(el, gameState) {
   const current = gameState.players.find((p) => p.id === gameState.currentPlayerId);
   const sideLabel = current.side === SIDE.BOTTOM ? "unten" : "oben";

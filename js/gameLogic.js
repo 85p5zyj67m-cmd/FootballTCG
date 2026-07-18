@@ -1,27 +1,60 @@
 // Reine Spiellogik & Zustand - keine DOM-Zugriffe hier.
 
-export const BOARD_COLS = 12;
-export const BOARD_ROWS = 9;
-export const GOAL_COLUMN = 6; // 1-indexiert; bei gerader Spaltenzahl die linke der beiden mittleren Spalten
+export const BOARD_COLS = 9;
+export const BOARD_ROWS = 12;
+export const GOAL_COLUMN = 5; // 1-indexiert, mittlere Spalte von 9
 
 export const SIDE = {
   TOP: "top",
   BOTTOM: "bottom",
 };
 
+export const PIECES_PER_TEAM = 11;
+export const MAX_PIECES_PER_CELL = 2;
+
+// Reiht ein Team dicht vor der eigenen Torlinie auf und bricht in die naechste
+// Reihe um, falls nicht alle Spieler nebeneinander passen. Nur ein simpler
+// Startzustand - keine Formation.
+function layoutTeam(side, count, cols, rows) {
+  const edgeRow = side === SIDE.BOTTOM ? rows : 1;
+  const rowStep = side === SIDE.BOTTOM ? -1 : 1;
+  let row = edgeRow + rowStep;
+
+  const singleRowFits = count <= cols;
+  let col = singleRowFits ? Math.max(1, Math.floor((cols - count) / 2) + 1) : 1;
+
+  const pieces = [];
+  for (let i = 0; i < count; i++) {
+    if (col > cols) {
+      col = 1;
+      row += rowStep;
+    }
+    pieces.push({ id: `${side}-${i + 1}`, side, row, col });
+    col++;
+  }
+  return pieces;
+}
+
 // Legt fest, wer welche Seite spielt. localPlayerId markiert, welcher
 // Spieler auf diesem Client sitzt - Grundlage fuer den spaeteren
 // Netzwerk-Sync im 1vs1-Multiplayer.
 export function createGameState() {
+  const cols = BOARD_COLS;
+  const rows = BOARD_ROWS;
+
   return {
-    cols: BOARD_COLS,
-    rows: BOARD_ROWS,
+    cols,
+    rows,
     players: [
       { id: 1, side: SIDE.BOTTOM },
       { id: 2, side: SIDE.TOP },
     ],
     localPlayerId: 1,
     currentPlayerId: 1,
+    pieces: [
+      ...layoutTeam(SIDE.BOTTOM, PIECES_PER_TEAM, cols, rows),
+      ...layoutTeam(SIDE.TOP, PIECES_PER_TEAM, cols, rows),
+    ],
   };
 }
 
@@ -39,4 +72,31 @@ export function isCurrentPlayer(gameState, playerId) {
 
 export function isCellOnBoard(row, col, gameState) {
   return row >= 1 && row <= gameState.rows && col >= 1 && col <= gameState.cols;
+}
+
+export function getPiecesAtCell(gameState, row, col) {
+  return gameState.pieces.filter((p) => p.row === row && p.col === col);
+}
+
+export function canPlacePieceAt(gameState, pieceId, row, col) {
+  if (!isCellOnBoard(row, col, gameState)) {
+    return false;
+  }
+  const occupants = getPiecesAtCell(gameState, row, col).filter((p) => p.id !== pieceId);
+  return occupants.length < MAX_PIECES_PER_CELL;
+}
+
+// Bewegt eine Spielfigur, sofern die Zielzelle auf dem Feld liegt und dort
+// noch nicht die maximale Anzahl an Figuren steht. Mutiert gameState direkt.
+export function movePiece(gameState, pieceId, row, col) {
+  if (!canPlacePieceAt(gameState, pieceId, row, col)) {
+    return false;
+  }
+  const piece = gameState.pieces.find((p) => p.id === pieceId);
+  if (!piece) {
+    return false;
+  }
+  piece.row = row;
+  piece.col = col;
+  return true;
 }
