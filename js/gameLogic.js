@@ -1,8 +1,8 @@
 // Reine Spiellogik & Zustand - keine DOM-Zugriffe hier.
 
-export const BOARD_COLS = 7;
-export const BOARD_ROWS = 9;
-export const GOAL_COLUMN = 4; // 1-indexiert, mittlere Spalte von 7
+export const BOARD_COLS = 9;
+export const BOARD_ROWS = 14;
+export const GOAL_COLUMN = 5; // 1-indexiert, mittlere Spalte von 9
 
 export const SIDE = {
   TOP: "top",

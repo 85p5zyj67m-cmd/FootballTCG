@@ -33,7 +33,32 @@ export function renderPitch(container, gameState) {
   const goalBottom = document.createElement("div");
   goalBottom.className = "goal-zone bottom";
   goalBottom.style.gridColumn = `${GOAL_COLUMN} / ${GOAL_COLUMN + 1}`;
+  goalBottom.style.gridRow = `${gameState.rows + 2} / ${gameState.rows + 3}`;
   container.appendChild(goalBottom);
+}
+
+// Berechnet die groesstmoegliche Zellgroesse, mit der das komplette
+// Spielfeld (inkl. beider Tor-Streifen) ohne Scrollen in den verfuegbaren
+// Platz von wrapperEl passt, und setzt sie als CSS-Variable.
+const GOAL_DEPTH_RATIO = 0.5;
+
+export function fitPitchToViewport(wrapperEl, gameState) {
+  const styles = getComputedStyle(wrapperEl);
+  const paddingX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
+  const paddingY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+  const borderWidth = 6; // 2 * 3px Pitch-Rahmen
+
+  const availableWidth = wrapperEl.clientWidth - paddingX - borderWidth;
+  const availableHeight = wrapperEl.clientHeight - paddingY - borderWidth;
+
+  const rowUnits = gameState.rows + 2 * GOAL_DEPTH_RATIO;
+  const cellFromWidth = availableWidth / gameState.cols;
+  const cellFromHeight = availableHeight / rowUnits;
+
+  const cellSize = Math.max(8, Math.floor(Math.min(cellFromWidth, cellFromHeight)));
+
+  document.documentElement.style.setProperty("--cell-size", `${cellSize}px`);
+  document.documentElement.style.setProperty("--goal-depth", `${cellSize * GOAL_DEPTH_RATIO}px`);
 }
 
 export function renderTurnIndicator(el, gameState) {
