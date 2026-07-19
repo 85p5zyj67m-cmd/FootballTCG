@@ -19,17 +19,62 @@ fitPitchToViewport(boardWrapperEl, gameState);
 
 window.addEventListener("resize", () => fitPitchToViewport(boardWrapperEl, gameState));
 
-// Verschieben per Pointer-Events (mousedown -> mousemove -> mouseup) statt
-// natives HTML5-Drag&Drop, da sich Letzteres unzuverlaessig ansteuern laesst.
+// Auf Touchgeraeten kann eine Figur per Tippen ausgewaehlt und anschliessend
+// durch Tippen auf ein Zielfeld bewegt werden. Die Maussteuerung per Ziehen
+// bleibt fuer Desktop-Nutzer erhalten.
+let selectedPieceId = null;
 let draggedPieceId = null;
 let ghostEl = null;
 let hoveredCell = null;
+let dragStartX = 0;
+let dragStartY = 0;
+let didDrag = false;
+
+function renderGame() {
+  renderPieces(pitchEl, gameState);
+  renderTurnIndicator(turnIndicatorEl, gameState);
+  applySelection();
+}
+
+function applySelection() {
+  pitchEl.querySelectorAll(".piece.selected").forEach((piece) => {
+    piece.classList.remove("selected");
+  });
+
+  if (!selectedPieceId) return;
+  const selectedPiece = pitchEl.querySelector(
+    `.piece[data-piece-id="${selectedPieceId}"]`,
+  );
+  if (selectedPiece) selectedPiece.classList.add("selected");
+}
+
+function selectPiece(pieceId) {
+  selectedPieceId = selectedPieceId === pieceId ? null : pieceId;
+  applySelection();
+}
+
+function moveSelectedPiece(cell) {
+  if (!selectedPieceId || !cell) return;
+
+  movePiece(
+    gameState,
+    selectedPieceId,
+    Number(cell.dataset.row),
+    Number(cell.dataset.col),
+  );
+  selectedPieceId = null;
+  renderGame();
+}
 
 function startDrag(pieceId, token, pointerX, pointerY) {
   draggedPieceId = pieceId;
+  dragStartX = pointerX;
+  dragStartY = pointerY;
+  didDrag = false;
 
   const rect = token.getBoundingClientRect();
   ghostEl = token.cloneNode(true);
+  ghostEl.classList.remove("selected");
   ghostEl.classList.add("piece-ghost");
   ghostEl.style.width = `${rect.width}px`;
   ghostEl.style.height = `${rect.height}px`;
@@ -61,32 +106,62 @@ function endDrag(pointerX, pointerY) {
     ghostEl = null;
   }
 
-  const dropTarget = document.elementFromPoint(pointerX, pointerY);
-  const cell = dropTarget ? dropTarget.closest(".cell") : null;
-  if (cell) {
-    movePiece(gameState, draggedPieceId, Number(cell.dataset.row), Number(cell.dataset.col));
+  if (didDrag) {
+    const dropTarget = document.elementFromPoint(pointerX, pointerY);
+    const cell = dropTarget ? dropTarget.closest(".cell") : null;
+    if (cell) {
+      movePiece(
+        gameState,
+        draggedPieceId,
+        Number(cell.dataset.row),
+        Number(cell.dataset.col),
+      );
+      selectedPieceId = null;
+    }
+  } else {
+    selectPiece(draggedPieceId);
   }
 
   draggedPieceId = null;
-  renderPieces(pitchEl, gameState);
+  renderGame();
 }
 
-pitchEl.addEventListener("mousedown", (event) => {
+pitchEl.addEventListener("pointerdown", (event) => {
   const token = event.target.closest(".piece");
   if (!token) return;
+
   event.preventDefault();
   startDrag(token.dataset.pieceId, token, event.clientX, event.clientY);
 });
 
-window.addEventListener("mousemove", (event) => {
+window.addEventListener("pointermove", (event) => {
   if (!draggedPieceId) return;
-  moveGhostTo(event.clientX, event.clientY);
 
+  const distance = Math.hypot(
+    event.clientX - dragStartX,
+    event.clientY - dragStartY,
+  );
+  if (distance > 8) didDrag = true;
+  if (!didDrag) return;
+
+  moveGhostTo(event.clientX, event.clientY);
   const target = document.elementFromPoint(event.clientX, event.clientY);
   setHoveredCell(target ? target.closest(".cell") : null);
 });
 
-window.addEventListener("mouseup", (event) => {
+window.addEventListener("pointerup", (event) => {
   if (!draggedPieceId) return;
   endDrag(event.clientX, event.clientY);
+});
+
+window.addEventListener("pointercancel", () => {
+  if (!draggedPieceId) return;
+  endDrag(dragStartX, dragStartY);
+});
+
+pitchEl.addEventListener("pointerup", (event) => {
+  if (draggedPieceId || didDrag) return;
+  const cell = event.target.closest(".cell");
+  if (!cell || event.target.closest(".piece")) return;
+  moveSelectedPiece(cell);
 });
