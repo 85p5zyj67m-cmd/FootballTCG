@@ -3,6 +3,13 @@
 
 import { SIDE, GOAL_COLUMN } from "./gameLogic.js";
 
+function addPitchMarking(container, className) {
+  const marking = document.createElement("div");
+  marking.className = `pitch-marking ${className}`;
+  marking.setAttribute("aria-hidden", "true");
+  container.appendChild(marking);
+}
+
 export function renderPitch(container, gameState) {
   container.innerHTML = "";
   container.style.gridTemplateColumns = `repeat(${gameState.cols}, var(--cell-size))`;
@@ -31,6 +38,21 @@ export function renderPitch(container, gameState) {
       container.appendChild(cell);
     }
   }
+
+  // Reine Dekoration: Strafraeume, Torraeume, Punkte und Mittelkreis liegen
+  // ueber dem Raster, nehmen aber keine Zeigerereignisse entgegen.
+  [
+    "penalty-area top",
+    "penalty-area bottom",
+    "goal-area top",
+    "goal-area bottom",
+    "penalty-spot top",
+    "penalty-spot bottom",
+    "penalty-arc top",
+    "penalty-arc bottom",
+    "center-circle",
+    "center-spot",
+  ].forEach((className) => addPitchMarking(container, className));
 
   const goalBottom = document.createElement("div");
   goalBottom.className = "goal-zone bottom";
