@@ -12,26 +12,36 @@ export const SIDE = {
 export const PIECES_PER_TEAM = 11;
 export const MAX_PIECES_PER_CELL = 2;
 
-// Reiht ein Team dicht vor der eigenen Torlinie auf und bricht in die naechste
-// Reihe um, falls nicht alle Spieler nebeneinander passen. Nur ein simpler
-// Startzustand - keine Formation.
-function layoutTeam(side, count, cols, rows) {
-  const edgeRow = side === SIDE.BOTTOM ? rows : 1;
-  const rowStep = side === SIDE.BOTTOM ? -1 : 1;
-  let row = edgeRow + rowStep;
+// Klassische 4-4-2-Grundordnung: Torwart, Viererkette, Vierer-Mittelfeld
+// und zwei Stuermer. Das obere Team wird vertikal gespiegelt, sodass beide
+// Mannschaften in Richtung gegnerisches Tor ausgerichtet sind.
+const FORMATION_4_4_2 = [
+  { rowFromOwnGoal: 0, cols: [5] },
+  { rowFromOwnGoal: 2, cols: [1, 3, 7, 9] },
+  { rowFromOwnGoal: 4, cols: [1, 3, 7, 9] },
+  { rowFromOwnGoal: 6, cols: [3, 7] },
+];
 
-  const singleRowFits = count <= cols;
-  let col = singleRowFits ? Math.max(1, Math.floor((cols - count) / 2) + 1) : 1;
-
+function layoutTeam(side, rows) {
   const pieces = [];
-  for (let i = 0; i < count; i++) {
-    if (col > cols) {
-      col = 1;
-      row += rowStep;
+  let number = 1;
+
+  for (const line of FORMATION_4_4_2) {
+    const row = side === SIDE.BOTTOM
+      ? rows - line.rowFromOwnGoal
+      : 1 + line.rowFromOwnGoal;
+
+    for (const col of line.cols) {
+      pieces.push({
+        id: `${side}-${number}`,
+        side,
+        row,
+        col,
+      });
+      number++;
     }
-    pieces.push({ id: `${side}-${i + 1}`, side, row, col });
-    col++;
   }
+
   return pieces;
 }
 
@@ -52,8 +62,8 @@ export function createGameState() {
     localPlayerId: 1,
     currentPlayerId: 1,
     pieces: [
-      ...layoutTeam(SIDE.BOTTOM, PIECES_PER_TEAM, cols, rows),
-      ...layoutTeam(SIDE.TOP, PIECES_PER_TEAM, cols, rows),
+      ...layoutTeam(SIDE.BOTTOM, rows),
+      ...layoutTeam(SIDE.TOP, rows),
     ],
   };
 }
