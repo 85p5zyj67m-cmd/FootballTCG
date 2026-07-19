@@ -6,4 +6,8 @@ import { SIDE, GOAL_COLUMN } from "./gameLogic.js";
 function addPitchMarking(container, className) {
   const marking = document.createElement("div");
   marking.className = `pitch-marking ${className}`;
-  marking.setAttribute("aria-hidden
+  marking.setAttribute("aria-hidden", "true");
+  container.appendChild(marking);
+}
+
+export
