@@ -57,16 +57,19 @@ body {
 }
 
 .pitch {
+  position: relative;
   display: grid;
   border: 3px solid var(--line-color);
   background: var(--grass-dark);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   touch-action: pan-x pan-y pinch-zoom;
+  overflow: hidden;
 }
 
 .cell {
   border: 1px solid rgba(255, 255, 255, 0.18);
   position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -86,7 +89,97 @@ body {
   outline-offset: -2px;
 }
 
+.pitch-marking {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pitch-marking.penalty-area,
+.pitch-marking.goal-area {
+  left: 50%;
+  transform: translateX(-50%);
+  border: 2px solid var(--line-color);
+}
+
+.pitch-marking.penalty-area {
+  width: calc(var(--cell-size) * 7);
+  height: calc(var(--cell-size) * 3);
+}
+
+.pitch-marking.goal-area {
+  width: calc(var(--cell-size) * 3);
+  height: calc(var(--cell-size) * 1.5);
+}
+
+.pitch-marking.penalty-area.top,
+.pitch-marking.goal-area.top {
+  top: var(--goal-depth);
+  border-top: 0;
+}
+
+.pitch-marking.penalty-area.bottom,
+.pitch-marking.goal-area.bottom {
+  bottom: var(--goal-depth);
+  border-bottom: 0;
+}
+
+.pitch-marking.penalty-spot,
+.pitch-marking.center-spot {
+  width: max(4px, calc(var(--cell-size) * 0.1));
+  height: max(4px, calc(var(--cell-size) * 0.1));
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--line-color);
+}
+
+.pitch-marking.penalty-spot.top {
+  top: calc(var(--goal-depth) + var(--cell-size) * 2.15);
+}
+
+.pitch-marking.penalty-spot.bottom {
+  bottom: calc(var(--goal-depth) + var(--cell-size) * 2.15);
+  transform: translate(-50%, 50%);
+}
+
+.pitch-marking.penalty-arc {
+  width: calc(var(--cell-size) * 2.4);
+  height: calc(var(--cell-size) * 1.2);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 2px solid var(--line-color);
+}
+
+.pitch-marking.penalty-arc.top {
+  top: calc(var(--goal-depth) + var(--cell-size) * 2.35);
+  border-top: 0;
+  border-radius: 0 0 calc(var(--cell-size) * 1.2) calc(var(--cell-size) * 1.2);
+}
+
+.pitch-marking.penalty-arc.bottom {
+  bottom: calc(var(--goal-depth) + var(--cell-size) * 2.35);
+  border-bottom: 0;
+  border-radius: calc(var(--cell-size) * 1.2) calc(var(--cell-size) * 1.2) 0 0;
+}
+
+.pitch-marking.center-circle {
+  width: calc(var(--cell-size) * 3);
+  height: calc(var(--cell-size) * 3);
+  left: 50%;
+  top: calc(var(--goal-depth) + var(--cell-size) * 7);
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--line-color);
+  border-radius: 50%;
+}
+
+.pitch-marking.center-spot {
+  top: calc(var(--goal-depth) + var(--cell-size) * 7);
+}
+
 .piece {
+  position: relative;
+  z-index: 3;
   width: 62%;
   height: 62%;
   border-radius: 50%;
@@ -142,6 +235,8 @@ body {
 }
 
 .goal-zone {
+  position: relative;
+  z-index: 2;
   background: repeating-linear-gradient(
     45deg,
     rgba(255, 255, 255, 0.12),
