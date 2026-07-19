@@ -61,7 +61,7 @@ body {
   border: 3px solid var(--line-color);
   background: var(--grass-dark);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  touch-action: none;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .cell {
