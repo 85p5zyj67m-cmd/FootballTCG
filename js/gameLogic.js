@@ -12,49 +12,54 @@ export const SIDE = {
 export const PIECES_PER_TEAM = 11;
 export const MAX_PIECES_PER_CELL = 2;
 
-// Klassische 4-4-2-Grundordnung: Torwart, Viererkette, Vierer-Mittelfeld
-// und zwei Stuermer. Das obere Team wird vertikal gespiegelt, sodass beide
-// Mannschaften in Richtung gegnerisches Tor ausgerichtet sind.
-const FORMATION_4_4_2 = [
-  { rowFromOwnGoal: 0, cols: [5] },
-  { rowFromOwnGoal: 2, cols: [1, 3, 7, 9] },
-  { rowFromOwnGoal: 4, cols: [1, 3, 7, 9] },
-  { rowFromOwnGoal: 6, cols: [3, 7] },
-];
+// Standardaufstellung entsprechend der Referenzgrafik. Die Nummern bleiben
+// bewusst an ihren dort gezeigten Positionen und werden nicht automatisch
+// zeilenweise vergeben.
+const FORMATION_BY_SIDE = {
+  [SIDE.TOP]: [
+    { number: 1, row: 1, col: 5 },
+    { number: 2, row: 3, col: 2 },
+    { number: 3, row: 3, col: 4 },
+    { number: 5, row: 3, col: 6 },
+    { number: 4, row: 3, col: 8 },
+    { number: 6, row: 5, col: 2 },
+    { number: 7, row: 5, col: 4 },
+    { number: 11, row: 5, col: 6 },
+    { number: 9, row: 5, col: 8 },
+    { number: 8, row: 7, col: 4 },
+    { number: 10, row: 7, col: 6 },
+  ],
+  [SIDE.BOTTOM]: [
+    { number: 10, row: 8, col: 4 },
+    { number: 11, row: 8, col: 6 },
+    { number: 6, row: 10, col: 2 },
+    { number: 7, row: 10, col: 4 },
+    { number: 8, row: 10, col: 6 },
+    { number: 9, row: 10, col: 8 },
+    { number: 2, row: 12, col: 2 },
+    { number: 3, row: 12, col: 4 },
+    { number: 4, row: 12, col: 6 },
+    { number: 5, row: 12, col: 8 },
+    { number: 1, row: 14, col: 5 },
+  ],
+};
 
-function layoutTeam(side, rows) {
-  const pieces = [];
-  let number = 1;
-
-  for (const line of FORMATION_4_4_2) {
-    const row = side === SIDE.BOTTOM
-      ? rows - line.rowFromOwnGoal
-      : 1 + line.rowFromOwnGoal;
-
-    for (const col of line.cols) {
-      pieces.push({
-        id: `${side}-${number}`,
-        side,
-        row,
-        col,
-      });
-      number++;
-    }
-  }
-
-  return pieces;
+function layoutTeam(side) {
+  return FORMATION_BY_SIDE[side].map(({ number, row, col }) => ({
+    id: `${side}-${number}`,
+    side,
+    row,
+    col,
+  }));
 }
 
 // Legt fest, wer welche Seite spielt. localPlayerId markiert, welcher
 // Spieler auf diesem Client sitzt - Grundlage fuer den spaeteren
 // Netzwerk-Sync im 1vs1-Multiplayer.
 export function createGameState() {
-  const cols = BOARD_COLS;
-  const rows = BOARD_ROWS;
-
   return {
-    cols,
-    rows,
+    cols: BOARD_COLS,
+    rows: BOARD_ROWS,
     players: [
       { id: 1, side: SIDE.BOTTOM },
       { id: 2, side: SIDE.TOP },
@@ -62,9 +67,16 @@ export function createGameState() {
     localPlayerId: 1,
     currentPlayerId: 1,
     pieces: [
-      ...layoutTeam(SIDE.BOTTOM, rows),
-      ...layoutTeam(SIDE.TOP, rows),
+      ...layoutTeam(SIDE.BOTTOM),
+      ...layoutTeam(SIDE.TOP),
     ],
+    // Der Ball startet beim unteren Spieler 10. Seine Position wird zusaetzlich
+    // gespeichert, damit er nach einem Pass auch frei auf einem Feld liegen kann.
+    ball: {
+      row: 8,
+      col: 4,
+      possessorId: "bottom-10",
+    },
   };
 }
 
@@ -96,17 +108,52 @@ export function canPlacePieceAt(gameState, pieceId, row, col) {
   return occupants.length < MAX_PIECES_PER_CELL;
 }
 
-// Bewegt eine Spielfigur, sofern die Zielzelle auf dem Feld liegt und dort
-// noch nicht die maximale Anzahl an Figuren steht. Mutiert gameState direkt.
+function updatePossessionForCell(gameState, row, col, preferredPieceId = null) {
+  const occupants = getPiecesAtCell(gameState, row, col);
+  const preferred = occupants.find((piece) => piece.id === preferredPieceId);
+  gameState.ball.possessorId = preferred?.id ?? occupants[0]?.id ?? null;
+}
+
+// Bewegt eine Spielfigur. Hat sie den Ball, folgt dieser automatisch. Bewegt
+// sie sich auf den freien Ball, uebernimmt sie den Ballbesitz.
 export function movePiece(gameState, pieceId, row, col) {
   if (!canPlacePieceAt(gameState, pieceId, row, col)) {
     return false;
   }
+
   const piece = gameState.pieces.find((p) => p.id === pieceId);
   if (!piece) {
     return false;
   }
+
+  const carriedBall = gameState.ball.possessorId === pieceId;
   piece.row = row;
   piece.col = col;
+
+  if (carriedBall) {
+    gameState.ball.row = row;
+    gameState.ball.col = col;
+  } else if (
+    gameState.ball.possessorId === null
+    && gameState.ball.row === row
+    && gameState.ball.col === col
+  ) {
+    gameState.ball.possessorId = pieceId;
+  }
+
+  return true;
+}
+
+// Der Ball darf auf jedes Feld gespielt werden. Liegt dort mindestens eine
+// Figur, geht der Ballbesitz an eine Figur auf diesem Feld; sonst bleibt der
+// Ball frei liegen.
+export function moveBall(gameState, row, col) {
+  if (!isCellOnBoard(row, col, gameState)) {
+    return false;
+  }
+
+  gameState.ball.row = row;
+  gameState.ball.col = col;
+  updatePossessionForCell(gameState, row, col);
   return true;
 }
