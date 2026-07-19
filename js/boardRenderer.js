@@ -13,13 +13,15 @@ export function renderPitch(container, gameState) {
   goalTop.style.gridColumn = `${GOAL_COLUMN} / ${GOAL_COLUMN + 1}`;
   container.appendChild(goalTop);
 
-  const halfwayRow = Math.ceil(gameState.rows / 2);
+  // Die Mittellinie liegt bei einer geraden Anzahl Reihen exakt zwischen
+  // den beiden mittleren Reihen, also bei 14 Reihen zwischen 7 und 8.
+  const firstRowBelowHalfway = Math.floor(gameState.rows / 2) + 1;
 
   for (let row = 1; row <= gameState.rows; row++) {
     for (let col = 1; col <= gameState.cols; col++) {
       const cell = document.createElement("div");
       cell.className = "cell";
-      if (row === halfwayRow) {
+      if (row === firstRowBelowHalfway) {
         cell.classList.add("halfway-line");
       }
       cell.dataset.row = row;
