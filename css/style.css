@@ -61,6 +61,7 @@ body {
   border: 3px solid var(--line-color);
   background: var(--grass-dark);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  touch-action: none;
 }
 
 .cell {
@@ -99,11 +100,19 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
 }
 
 .piece:active {
   cursor: grabbing;
+}
+
+.piece.selected {
+  outline: max(3px, calc(var(--cell-size) * 0.07)) solid #ffe45c;
+  outline-offset: 2px;
+  transform: scale(1.08);
 }
 
 .cell.crowded .piece {
