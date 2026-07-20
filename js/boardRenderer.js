@@ -117,6 +117,18 @@ export function renderPieces(container, gameState) {
   }
 }
 
+export function renderBall(container, gameState) {
+  container.querySelectorAll(".ball").forEach((el) => el.remove());
+
+  const { row, col } = gameState.ball;
+  const cell = container.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+  if (!cell) return;
+
+  const ball = document.createElement("div");
+  ball.className = "ball";
+  cell.appendChild(ball);
+}
+
 export function renderTurnIndicator(el, gameState) {
   const current = gameState.players.find((p) => p.id === gameState.currentPlayerId);
   const sideLabel = current.side === SIDE.BOTTOM ? "unten" : "oben";

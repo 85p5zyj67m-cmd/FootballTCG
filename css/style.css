@@ -228,7 +228,35 @@ body {
   opacity: 0.25;
 }
 
-.piece-ghost {
+.ball {
+  position: absolute;
+  bottom: 6%;
+  right: 6%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #d0d0d0 65%, #a8a8a8);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  z-index: 4;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ball:active {
+  cursor: grabbing;
+}
+
+.ball.selected {
+  outline: max(2px, calc(var(--cell-size) * 0.05)) solid #ffe45c;
+  outline-offset: 2px;
+}
+
+.ball-dragging {
+  opacity: 0.25;
+}
+
+.drag-ghost {
   position: fixed;
   pointer-events: none;
   z-index: 1000;

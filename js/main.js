@@ -1,7 +1,8 @@
-import { createGameState, movePiece } from "./gameLogic.js";
+import { createGameState, movePiece, moveBall } from "./gameLogic.js";
 import {
   renderPitch,
   renderPieces,
+  renderBall,
   renderTurnIndicator,
   fitPitchToViewport,
 } from "./boardRenderer.js";
@@ -14,60 +15,69 @@ const boardWrapperEl = document.querySelector(".board-wrapper");
 
 renderPitch(pitchEl, gameState);
 renderPieces(pitchEl, gameState);
+renderBall(pitchEl, gameState);
 renderTurnIndicator(turnIndicatorEl, gameState);
 fitPitchToViewport(boardWrapperEl, gameState);
 
 window.addEventListener("resize", () => fitPitchToViewport(boardWrapperEl, gameState));
 
-// Auf Touchgeraeten kann eine Figur per Tippen ausgewaehlt und anschliessend
-// durch Tippen auf ein Zielfeld bewegt werden. Die Maussteuerung per Ziehen
-// bleibt fuer Desktop-Nutzer erhalten.
-let selectedPieceId = null;
-let draggedPieceId = null;
+// Verschieben von Spielern UND Ball per Pointer-Events (mousedown -> mousemove
+// -> mouseup). Auf Touchgeraeten kann ein Objekt stattdessen per Tippen
+// ausgewaehlt und anschliessend durch Tippen auf ein Zielfeld bewegt werden.
+let selectedItem = null;
+let draggedItem = null;
 let ghostEl = null;
 let hoveredCell = null;
 let dragStartX = 0;
 let dragStartY = 0;
 let didDrag = false;
 
+function sameItem(a, b) {
+  if (!a || !b) return a === b;
+  return a.type === b.type && a.id === b.id;
+}
+
 function renderGame() {
   renderPieces(pitchEl, gameState);
+  renderBall(pitchEl, gameState);
   renderTurnIndicator(turnIndicatorEl, gameState);
   applySelection();
 }
 
 function applySelection() {
-  pitchEl.querySelectorAll(".piece.selected").forEach((piece) => {
-    piece.classList.remove("selected");
+  pitchEl.querySelectorAll(".piece.selected, .ball.selected").forEach((el) => {
+    el.classList.remove("selected");
   });
 
-  if (!selectedPieceId) return;
-  const selectedPiece = pitchEl.querySelector(
-    `.piece[data-piece-id="${selectedPieceId}"]`,
-  );
-  if (selectedPiece) selectedPiece.classList.add("selected");
+  if (!selectedItem) return;
+  const selectedEl =
+    selectedItem.type === "piece"
+      ? pitchEl.querySelector(`.piece[data-piece-id="${selectedItem.id}"]`)
+      : pitchEl.querySelector(".ball");
+  if (selectedEl) selectedEl.classList.add("selected");
 }
 
-function selectPiece(pieceId) {
-  selectedPieceId = selectedPieceId === pieceId ? null : pieceId;
+function selectItem(item) {
+  selectedItem = sameItem(selectedItem, item) ? null : item;
   applySelection();
 }
 
-function moveSelectedPiece(cell) {
-  if (!selectedPieceId || !cell) return;
+function moveSelectedItem(cell) {
+  if (!selectedItem || !cell) return;
 
-  movePiece(
-    gameState,
-    selectedPieceId,
-    Number(cell.dataset.row),
-    Number(cell.dataset.col),
-  );
-  selectedPieceId = null;
+  const row = Number(cell.dataset.row);
+  const col = Number(cell.dataset.col);
+  if (selectedItem.type === "piece") {
+    movePiece(gameState, selectedItem.id, row, col);
+  } else {
+    moveBall(gameState, row, col);
+  }
+  selectedItem = null;
   renderGame();
 }
 
-function startDrag(pieceId, token, pointerX, pointerY) {
-  draggedPieceId = pieceId;
+function startDrag(item, token, pointerX, pointerY) {
+  draggedItem = item;
   dragStartX = pointerX;
   dragStartY = pointerY;
   didDrag = false;
@@ -75,13 +85,16 @@ function startDrag(pieceId, token, pointerX, pointerY) {
   const rect = token.getBoundingClientRect();
   ghostEl = token.cloneNode(true);
   ghostEl.classList.remove("selected");
-  ghostEl.classList.add("piece-ghost");
+  ghostEl.classList.add("drag-ghost");
   ghostEl.style.width = `${rect.width}px`;
   ghostEl.style.height = `${rect.height}px`;
+  ghostEl.style.position = "fixed";
+  ghostEl.style.bottom = "auto";
+  ghostEl.style.right = "auto";
   document.body.appendChild(ghostEl);
   moveGhostTo(pointerX, pointerY);
 
-  token.classList.add("piece-dragging");
+  token.classList.add(item.type === "piece" ? "piece-dragging" : "ball-dragging");
 }
 
 function moveGhostTo(pointerX, pointerY) {
@@ -110,32 +123,38 @@ function endDrag(pointerX, pointerY) {
     const dropTarget = document.elementFromPoint(pointerX, pointerY);
     const cell = dropTarget ? dropTarget.closest(".cell") : null;
     if (cell) {
-      movePiece(
-        gameState,
-        draggedPieceId,
-        Number(cell.dataset.row),
-        Number(cell.dataset.col),
-      );
-      selectedPieceId = null;
+      const row = Number(cell.dataset.row);
+      const col = Number(cell.dataset.col);
+      if (draggedItem.type === "piece") {
+        movePiece(gameState, draggedItem.id, row, col);
+      } else {
+        moveBall(gameState, row, col);
+      }
+      selectedItem = null;
     }
   } else {
-    selectPiece(draggedPieceId);
+    selectItem(draggedItem);
   }
 
-  draggedPieceId = null;
+  draggedItem = null;
   renderGame();
 }
 
 pitchEl.addEventListener("pointerdown", (event) => {
-  const token = event.target.closest(".piece");
+  const pieceToken = event.target.closest(".piece");
+  const ballToken = !pieceToken ? event.target.closest(".ball") : null;
+  const token = pieceToken || ballToken;
   if (!token) return;
 
   event.preventDefault();
-  startDrag(token.dataset.pieceId, token, event.clientX, event.clientY);
+  const item = pieceToken
+    ? { type: "piece", id: pieceToken.dataset.pieceId }
+    : { type: "ball" };
+  startDrag(item, token, event.clientX, event.clientY);
 });
 
 window.addEventListener("pointermove", (event) => {
-  if (!draggedPieceId) return;
+  if (!draggedItem) return;
 
   const distance = Math.hypot(
     event.clientX - dragStartX,
@@ -150,18 +169,18 @@ window.addEventListener("pointermove", (event) => {
 });
 
 window.addEventListener("pointerup", (event) => {
-  if (!draggedPieceId) return;
+  if (!draggedItem) return;
   endDrag(event.clientX, event.clientY);
 });
 
 window.addEventListener("pointercancel", () => {
-  if (!draggedPieceId) return;
+  if (!draggedItem) return;
   endDrag(dragStartX, dragStartY);
 });
 
 pitchEl.addEventListener("pointerup", (event) => {
-  if (draggedPieceId || didDrag) return;
+  if (draggedItem || didDrag) return;
   const cell = event.target.closest(".cell");
-  if (!cell || event.target.closest(".piece")) return;
-  moveSelectedPiece(cell);
+  if (!cell || event.target.closest(".piece") || event.target.closest(".ball")) return;
+  moveSelectedItem(cell);
 });
