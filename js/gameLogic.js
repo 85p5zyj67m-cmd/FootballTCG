@@ -170,6 +170,21 @@ function resetFormationsAndKickoff(gameState, kickoffSide) {
   placeKickoff(gameState, kickoffSide);
 }
 
+// Tackling ist nur erlaubt, wenn der Verteidiger schon VOR seiner eigenen
+// Bewegung in diesem Zug neben dem gegnerischen Ballfuehrer stand - diese
+// Momentaufnahme wird bei Zugbeginn (und nach einem Tor-Reset) erstellt und
+// verliert eine Figur, sobald sie sich in diesem Zug bewegt (siehe
+// executeMove/executeDefenderNudge). Graetsche hebt die Einschraenkung auf.
+function computeTackleEligiblePieceIds(gameState, side) {
+  const carrierId = gameState.ball.possessorId;
+  if (!carrierId) return [];
+  const carrier = getPieceById(gameState, carrierId);
+  if (!carrier || carrier.side === side) return [];
+  return gameState.pieces
+    .filter((p) => p.side === side && chebyshevDistance(p.row, p.col, carrier.row, carrier.col) <= 1)
+    .map((p) => p.id);
+}
+
 // --- Karten: Deck/Hand-Verwaltung ---
 
 function drawCardsForSide(gameState, side, count) {
@@ -234,10 +249,12 @@ export function createGameState() {
     pendingDiscard: null,
     effects: emptyEffects(),
     bonusActions: [],
+    tackleEligiblePieceIds: [],
   };
   placeKickoff(gameState, SIDE.BOTTOM);
   drawCardsForSide(gameState, SIDE.BOTTOM, STARTING_HAND_SIZE);
   drawCardsForSide(gameState, SIDE.TOP, STARTING_HAND_SIZE);
+  gameState.tackleEligiblePieceIds = computeTackleEligiblePieceIds(gameState, SIDE.BOTTOM);
   return gameState;
 }
 
@@ -301,6 +318,7 @@ function switchTurn(gameState) {
 
   const newSide = getCurrentPlayer(gameState).side;
   drawCardsForSide(gameState, newSide, 1);
+  gameState.tackleEligiblePieceIds = computeTackleEligiblePieceIds(gameState, newSide);
 }
 
 // Beendet den aktuellen Zug sofort (z.B. "Zug beenden"-Button oder eine KI,
@@ -323,6 +341,10 @@ function scoreGoal(gameState, scoringSide) {
     gameState.winner = scoringSide;
   }
   resetFormationsAndKickoff(gameState, opponentOf(scoringSide));
+  // Der Zug laeuft nach einem Tor weiter (siehe finishAction) - die
+  // Momentaufnahme fuer Tackling muss auf Basis der frischen Formation neu
+  // berechnet werden, sonst zaehlen alte (jetzt bedeutungslose) Positionen.
+  gameState.tackleEligiblePieceIds = computeTackleEligiblePieceIds(gameState, scoringSide);
 }
 
 // --- Abfragen (rein lesend, fuer UI-Hervorhebung und KI-Entscheidungen) ---
@@ -399,6 +421,13 @@ export function getLegalTackleTarget(gameState, pieceId) {
   if (!carrierId) return null;
   const carrier = getPieceById(gameState, carrierId);
   if (!carrier || carrier.side === piece.side) return null;
+
+  // Nur erlaubt, wenn die Figur schon VOR ihrer eigenen Bewegung in diesem
+  // Zug neben dem Ballfuehrer stand - Graetsche hebt das auf.
+  if (!gameState.effects.graetscheArmed && !gameState.tackleEligiblePieceIds.includes(pieceId)) {
+    return null;
+  }
+
   const maxDistance = gameState.effects.graetscheArmed ? 2 : 1;
   if (chebyshevDistance(piece.row, piece.col, carrier.row, carrier.col) > maxDistance) return null;
   return carrier.id;
@@ -468,6 +497,7 @@ export function executeMove(gameState, pieceId, row, col) {
   }
 
   gameState.effects.pressedPieceIds = gameState.effects.pressedPieceIds.filter((id) => id !== pieceId);
+  gameState.tackleEligiblePieceIds = gameState.tackleEligiblePieceIds.filter((id) => id !== pieceId);
 
   finishAction(gameState, "move");
   return { ok: true };
@@ -628,6 +658,7 @@ export function executeDefenderNudge(gameState, pieceId, row, col) {
   ) {
     gameState.ball.possessorId = pieceId;
   }
+  gameState.tackleEligiblePieceIds = gameState.tackleEligiblePieceIds.filter((id) => id !== pieceId);
   return { ok: true };
 }
 
