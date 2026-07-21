@@ -20,7 +20,7 @@ export const ROLE = {
 export const PIECES_PER_TEAM = 11;
 export const MAX_PIECES_PER_CELL = 1; // "Zwei Spieler duerfen niemals auf demselben Feld stehen."
 export const ACTIONS_PER_TURN = 2;
-export const MOVE_MAX_DISTANCE = 2;
+export const MOVE_MAX_DISTANCE = 4; // kreisfoermiger Radius (Luftlinie), wie beim Passen
 export const PASS_MAX_DISTANCE = 4; // kreisfoermiger Radius (Luftlinie), nicht auf die 8 Richtungen beschraenkt
 export const SHOOT_MAX_DISTANCE = 3;
 export const WINNING_SCORE = 3;
@@ -126,28 +126,6 @@ function getLineCells(row0, col0, row1, col1) {
     }
   }
   return cells;
-}
-
-// Prueft, ob (row1,col1) -> (row2,col2) horizontal, vertikal oder diagonal
-// liegt (wie von Bewegung und Passen gefordert). Liefert null, falls nicht.
-function getStraightDirection(row1, col1, row2, col2) {
-  const dr = row2 - row1;
-  const dc = col2 - col1;
-  if (dr === 0 && dc === 0) return null;
-
-  const isHorizontal = dr === 0;
-  const isVertical = dc === 0;
-  const isDiagonal = Math.abs(dr) === Math.abs(dc);
-  if (!isHorizontal && !isVertical && !isDiagonal) return null;
-
-  const distance = Math.max(Math.abs(dr), Math.abs(dc));
-  const stepRow = Math.sign(dr);
-  const stepCol = Math.sign(dc);
-  const intermediates = [];
-  for (let i = 1; i < distance; i++) {
-    intermediates.push({ row: row1 + stepRow * i, col: col1 + stepCol * i });
-  }
-  return { distance, intermediates };
 }
 
 function getGoalCell(side, gameState) {
@@ -349,6 +327,9 @@ function scoreGoal(gameState, scoringSide) {
 
 // --- Abfragen (rein lesend, fuer UI-Hervorhebung und KI-Entscheidungen) ---
 
+// Bewegung ist wie Passen an keine der 8 Kompassrichtungen gebunden: jedes
+// Feld innerhalb eines kreisfoermigen Radius (Luftlinie) ist erreichbar,
+// sofern kein anderer Spieler auf der direkten Sichtlinie steht.
 export function getLegalMoveCells(gameState, pieceId) {
   const piece = getPieceById(gameState, pieceId);
   if (!piece) return [];
@@ -358,17 +339,18 @@ export function getLegalMoveCells(gameState, pieceId) {
   const maxDistance = isPressed ? 1 : isSprinting ? MOVE_MAX_DISTANCE + 2 : MOVE_MAX_DISTANCE;
 
   const results = [];
-  for (let row = piece.row - maxDistance; row <= piece.row + maxDistance; row++) {
-    for (let col = piece.col - maxDistance; col <= piece.col + maxDistance; col++) {
+  const range = Math.ceil(maxDistance);
+  for (let row = piece.row - range; row <= piece.row + range; row++) {
+    for (let col = piece.col - range; col <= piece.col + range; col++) {
       if (row === piece.row && col === piece.col) continue;
       if (!isCellOnBoard(row, col, gameState)) continue;
 
-      const direction = getStraightDirection(piece.row, piece.col, row, col);
-      if (!direction || direction.distance > maxDistance) continue;
+      const distance = circularDistance(piece.row, piece.col, row, col);
+      if (distance > maxDistance) continue;
       if (getPiecesAtCell(gameState, row, col).length >= MAX_PIECES_PER_CELL) continue;
-      const blocked = direction.intermediates.some(
-        (c) => getPiecesAtCell(gameState, c.row, c.col).length > 0,
-      );
+
+      const line = getLineCells(piece.row, piece.col, row, col).slice(1, -1);
+      const blocked = line.some((c) => getPiecesAtCell(gameState, c.row, c.col).length > 0);
       if (blocked) continue;
 
       results.push({ row, col });
