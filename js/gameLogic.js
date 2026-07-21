@@ -576,26 +576,43 @@ export function executeTackle(gameState, tacklerId) {
     return { ok: false, reason: "illegal_tackle" };
   }
 
+  const tackler = getPieceById(gameState, tacklerId);
   const ballRow = gameState.ball.row;
   const ballCol = gameState.ball.col;
-  const freeNeighbors = [];
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const row = ballRow + dr;
-      const col = ballCol + dc;
-      if (!isCellOnBoard(row, col, gameState)) continue;
-      if (getPiecesAtCell(gameState, row, col).length >= MAX_PIECES_PER_CELL) continue;
-      freeNeighbors.push({ row, col });
+
+  // Der Ball springt deterministisch in der Verlaengerung der Tackling-
+  // Richtung weg vom Tackler (Tackler links vom Ballfuehrer -> Ball rechts
+  // davon). Nur wenn das Spielfeldende erreicht ist, entscheidet der
+  // Zufall unter den verbleibenden Nachbarfeldern. Der Ball darf dabei auf
+  // einem besetzten Feld landen - die dortige Figur bekommt ihn dann sofort.
+  const dirRow = Math.sign(ballRow - tackler.row);
+  const dirCol = Math.sign(ballCol - tackler.col);
+  const preferredRow = ballRow + dirRow;
+  const preferredCol = ballCol + dirCol;
+
+  let landing;
+  if (isCellOnBoard(preferredRow, preferredCol, gameState)) {
+    landing = { row: preferredRow, col: preferredCol };
+  } else {
+    const onBoardNeighbors = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const row = ballRow + dr;
+        const col = ballCol + dc;
+        if (isCellOnBoard(row, col, gameState)) onBoardNeighbors.push({ row, col });
+      }
     }
+    landing =
+      onBoardNeighbors.length > 0
+        ? onBoardNeighbors[Math.floor(Math.random() * onBoardNeighbors.length)]
+        : { row: ballRow, col: ballCol };
   }
 
-  if (freeNeighbors.length > 0) {
-    const pick = freeNeighbors[Math.floor(Math.random() * freeNeighbors.length)];
-    gameState.ball.row = pick.row;
-    gameState.ball.col = pick.col;
-  }
-  gameState.ball.possessorId = null;
+  gameState.ball.row = landing.row;
+  gameState.ball.col = landing.col;
+  const landingOccupants = getPiecesAtCell(gameState, landing.row, landing.col);
+  gameState.ball.possessorId = landingOccupants.length > 0 ? landingOccupants[0].id : null;
 
   gameState.effects.graetscheArmed = false;
   const grantKonter = gameState.effects.konterArmed;
