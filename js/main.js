@@ -46,6 +46,11 @@ const cancelBtn = document.getElementById("cancel-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
 const handEl = document.getElementById("hand");
 const opponentHandInfoEl = document.getElementById("opponent-hand-info");
+const shotOverlayEl = document.getElementById("shot-overlay");
+const shotDieEl = document.getElementById("shot-die");
+const shotOutcomeEl = document.getElementById("shot-outcome");
+const shotMetaEl = document.getElementById("shot-meta");
+let shotOverlayTimer = null;
 
 let selectedPieceId = null;
 let actionMode = null; // "move" | "pass" | "tackle" | null
@@ -83,8 +88,25 @@ const FAILURE_MESSAGES = {
 
 function describeShotResult(result) {
   const modifierText = result.modifier ? ` (Modifikator ${result.modifier})` : "";
+  const emptyGoalText = result.keeperOnGoal ? "" : " (Tor unbewacht)";
   const outcomeText = result.outcome === "goal" ? "TOR!" : "Fehlschuss - Torwart haelt den Ball.";
-  return `Schuss aus ${result.distance} Feld(ern), benoetigt ${result.needed}+, gewuerfelt ${result.roll}${modifierText} -> ${outcomeText}`;
+  return `Schuss aus ${result.distance} Feld(ern)${emptyGoalText}, benoetigt ${result.needed}+, gewuerfelt ${result.roll}${modifierText} -> ${outcomeText}`;
+}
+
+function showShotOverlay(result) {
+  shotDieEl.textContent = result.roll;
+  shotOutcomeEl.textContent = result.outcome === "goal" ? "TOR!" : "Kein Tor";
+  shotOutcomeEl.className = `shot-outcome ${result.outcome === "goal" ? "goal" : "miss"}`;
+
+  const modifierText = result.modifier ? `, Modifikator ${result.modifier}` : "";
+  const emptyGoalText = result.keeperOnGoal ? "" : " - Tor unbewacht!";
+  shotMetaEl.textContent = `${result.distance} Feld(ern) entfernt, benoetigt ${result.needed}+${modifierText}${emptyGoalText}`;
+
+  shotOverlayEl.hidden = false;
+  clearTimeout(shotOverlayTimer);
+  shotOverlayTimer = setTimeout(() => {
+    shotOverlayEl.hidden = true;
+  }, 2400);
 }
 
 function describeSuccess(type, result) {
@@ -216,6 +238,7 @@ function handleActionResult(result, type) {
     return;
   }
   setMessage(describeSuccess(type, result));
+  if (type === "shoot") showShotOverlay(result);
   deselect();
   render();
   maybeTriggerAiTurn();
@@ -400,6 +423,7 @@ function runAiStep() {
   }
 
   setMessage(`KI: ${describeSuccess(result.type, result)}`);
+  if (result.type === "shoot") showShotOverlay(result);
   render();
 
   if (getCurrentPlayer(gameState).isAI && !gameState.winner) {

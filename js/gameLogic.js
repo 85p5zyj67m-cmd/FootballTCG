@@ -138,6 +138,39 @@ function opponentOf(side) {
   return side === SIDE.BOTTOM ? SIDE.TOP : SIDE.BOTTOM;
 }
 
+// Wie weit eine Reihe in Angriffsrichtung dieser Seite fortgeschritten ist
+// (hoeher = naeher am gegnerischen Tor). Fuer beide Seiten einheitlich
+// vergleichbar, da nur relativ zur eigenen Angriffsrichtung verwendet.
+function attackProgress(side, row, rows) {
+  return side === SIDE.BOTTOM ? rows - row : row - 1;
+}
+
+// Normale Abseitsregel: Der Empfaenger eines Passes darf nicht naeher am
+// gegnerischen Tor stehen als sowohl der Ball (= Position des Passgebers)
+// als auch der vorletzte Gegenspieler (hier vereinfacht: der am tiefsten
+// stehende gegnerische Feldspieler, der Torwart zaehlt nicht mit). In der
+// eigenen Haelfte kann man nie im Abseits stehen; Gleichstand zaehlt nicht
+// als Abseits (Vorteil fuer den Angreifer).
+function isPassOffside(gameState, passer, receiver) {
+  const side = passer.side;
+  const halfwayRow = Math.floor(gameState.rows / 2);
+  const inOwnHalf = side === SIDE.BOTTOM ? receiver.row > halfwayRow : receiver.row <= halfwayRow;
+  if (inOwnHalf) return false;
+
+  const opponentSide = opponentOf(side);
+  const defenders = gameState.pieces.filter(
+    (p) => p.side === opponentSide && p.role !== ROLE.GOALKEEPER,
+  );
+  if (defenders.length === 0) return false;
+
+  const progress = (row) => attackProgress(side, row, gameState.rows);
+  const receiverProgress = progress(receiver.row);
+  const ballProgress = progress(passer.row);
+  const defenderLineProgress = Math.max(...defenders.map((d) => progress(d.row)));
+
+  return receiverProgress > ballProgress && receiverProgress > defenderLineProgress;
+}
+
 // Setzt die Mannschaften an ihre Anfangsformation und gibt einer Mannschaft
 // den Anstoss: Ball in die Feldmitte, Ballbesitz beim naechststehenden
 // Feldspieler dieser Seite (der GK bleibt im Tor).
@@ -408,6 +441,7 @@ export function getLegalPassTargets(gameState, pieceId) {
         : occupants.filter((p) => p.side !== piece.side).length;
     }
     if (blockingCount > allowedOpponentBlockers) continue;
+    if (isPassOffside(gameState, piece, mate)) continue;
 
     results.push(mate.id);
   }
@@ -586,10 +620,13 @@ export function executeShoot(gameState, pieceId) {
   const roll = 1 + Math.floor(Math.random() * 6);
   let modifier = 0;
 
+  // Steht der Torwart nicht auf dem Tor (also nicht in der Schusslinie),
+  // ist es praktisch ein leeres Tor: jeder Wurf ueber 1 zaehlt als Treffer.
+  // Steht er dort, gilt weiterhin die distanzabhaengige Schwelle.
   const keeper = gameState.pieces.find((p) => p.side === opponentSide && p.role === ROLE.GOALKEEPER);
-  if (keeper && keeper.row === goalCell.row && keeper.col === goalCell.col) {
-    modifier -= 1;
-  }
+  const keeperOnGoal = Boolean(keeper && keeper.row === goalCell.row && keeper.col === goalCell.col);
+  const needed = keeperOnGoal ? info.needed : 2;
+
   const opponentAdjacent = gameState.pieces.some(
     (p) => p.side !== piece.side && chebyshevDistance(p.row, p.col, piece.row, piece.col) === 1,
   );
@@ -607,7 +644,7 @@ export function executeShoot(gameState, pieceId) {
   } else if (roll === 1) {
     isGoal = false;
   } else {
-    isGoal = roll + modifier >= info.needed;
+    isGoal = roll + modifier >= needed;
   }
 
   if (isGoal) {
@@ -625,7 +662,8 @@ export function executeShoot(gameState, pieceId) {
     ok: true,
     roll,
     modifier,
-    needed: info.needed,
+    needed,
+    keeperOnGoal,
     distance: info.distance,
     outcome: isGoal ? "goal" : "miss",
   };
