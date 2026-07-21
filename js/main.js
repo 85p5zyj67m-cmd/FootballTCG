@@ -356,7 +356,7 @@ handEl.addEventListener("click", (event) => {
     return;
   }
 
-  if (gameState.winner || getCurrentPlayer(gameState).isAI || gameState.cardPlayedThisTurn) return;
+  if (gameState.winner || getCurrentPlayer(gameState).isAI) return;
 
   const card = gameState.cardPiles[HUMAN_SIDE].hand.find((c) => c.instanceId === instanceId);
   if (!card) return;
@@ -383,14 +383,12 @@ function runAiStep() {
   const current = getCurrentPlayer(gameState);
   if (!current.isAI || gameState.winner) return;
 
-  if (!gameState.cardPlayedThisTurn) {
-    const cardResult = maybePlayAiCard(gameState, current.side);
-    if (cardResult) {
-      setMessage(`KI spielt Karte: ${cardResult.cardName}.`);
-      render();
-      setTimeout(runAiStep, 700);
-      return;
-    }
+  const cardResult = maybePlayAiCard(gameState, current.side);
+  if (cardResult) {
+    setMessage(`KI spielt Karte: ${cardResult.cardName}.`);
+    render();
+    setTimeout(runAiStep, 700);
+    return;
   }
 
   const result = performAiAction(gameState, current.side);

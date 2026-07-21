@@ -21,7 +21,7 @@ export const PIECES_PER_TEAM = 11;
 export const MAX_PIECES_PER_CELL = 1; // "Zwei Spieler duerfen niemals auf demselben Feld stehen."
 export const ACTIONS_PER_TURN = 2;
 export const MOVE_MAX_DISTANCE = 2;
-export const PASS_MAX_DISTANCE = 4;
+export const PASS_MAX_DISTANCE = 4; // kreisfoermiger Radius (Luftlinie), nicht auf die 8 Richtungen beschraenkt
 export const SHOOT_MAX_DISTANCE = 3;
 export const WINNING_SCORE = 3;
 export const STARTING_HAND_SIZE = 4;
@@ -92,6 +92,12 @@ function layoutTeam(side) {
 
 function chebyshevDistance(row1, col1, row2, col2) {
   return Math.max(Math.abs(row1 - row2), Math.abs(col1 - col2));
+}
+
+// Echte Luftlinie (kreisfoermiger Radius) - fuer Passen, das an keine der 8
+// Kompassrichtungen gebunden sein soll.
+function circularDistance(row1, col1, row2, col2) {
+  return Math.hypot(row1 - row2, col1 - col2);
 }
 
 // Bresenham-Linie inkl. beider Endpunkte - fuer die Schusslinie, die nicht
@@ -203,8 +209,8 @@ function drawCardsForSide(gameState, side, count) {
 
 function emptyEffects() {
   return {
-    extraMovementPieceId: null, // Sprint
-    extraRangePieceId: null, // Fernschuss
+    extraMovementPieceIds: [], // Sprint - Array, da beliebig viele Karten/Zug erlaubt sind
+    extraRangePieceIds: [], // Fernschuss - Array, aus demselben Grund
     doppelpassArmed: false,
     steilpassArmed: false,
     seitenwechselArmed: false,
@@ -219,8 +225,8 @@ function emptyEffects() {
 // pressedPieceIds/keeperBoostSide sind bewusst NICHT enthalten, da sie
 // ueber Zugwechsel hinweg bestehen bleiben sollen (siehe switchTurn).
 function clearThisTurnEffects(gameState) {
-  gameState.effects.extraMovementPieceId = null;
-  gameState.effects.extraRangePieceId = null;
+  gameState.effects.extraMovementPieceIds = [];
+  gameState.effects.extraRangePieceIds = [];
   gameState.effects.doppelpassArmed = false;
   gameState.effects.steilpassArmed = false;
   gameState.effects.seitenwechselArmed = false;
@@ -247,7 +253,6 @@ export function createGameState() {
       [SIDE.BOTTOM]: { deck: buildDeck(), hand: [], discard: [] },
       [SIDE.TOP]: { deck: buildDeck(), hand: [], discard: [] },
     },
-    cardPlayedThisTurn: false,
     pendingDiscard: null,
     effects: emptyEffects(),
     bonusActions: [],
@@ -308,7 +313,6 @@ function switchTurn(gameState) {
   gameState.currentPlayerId = gameState.currentPlayerId === 1 ? 2 : 1;
   gameState.actionsRemaining = ACTIONS_PER_TURN;
   gameState.bonusActions = [];
-  gameState.cardPlayedThisTurn = false;
   clearThisTurnEffects(gameState);
   // Pressing gilt nur fuer den naechsten Zug der betroffenen Seite - laeuft
   // jetzt ab, egal ob die Figur bewegt wurde oder nicht.
@@ -350,7 +354,7 @@ export function getLegalMoveCells(gameState, pieceId) {
   if (!piece) return [];
 
   const isPressed = gameState.effects.pressedPieceIds.includes(pieceId);
-  const isSprinting = gameState.effects.extraMovementPieceId === pieceId;
+  const isSprinting = gameState.effects.extraMovementPieceIds.includes(pieceId);
   const maxDistance = isPressed ? 1 : isSprinting ? MOVE_MAX_DISTANCE + 2 : MOVE_MAX_DISTANCE;
 
   const results = [];
@@ -373,6 +377,9 @@ export function getLegalMoveCells(gameState, pieceId) {
   return results;
 }
 
+// Passen ist an keine der 8 Kompassrichtungen gebunden: jeder Mitspieler
+// innerhalb eines kreisfoermigen Radius von PASS_MAX_DISTANCE Feldern
+// (Luftlinie) ist anspielbar, sofern die Sichtlinie frei ist.
 export function getLegalPassTargets(gameState, pieceId) {
   const piece = getPieceById(gameState, pieceId);
   if (!piece || gameState.ball.possessorId !== pieceId) return [];
@@ -385,11 +392,12 @@ export function getLegalPassTargets(gameState, pieceId) {
   const teammates = gameState.pieces.filter((p) => p.side === piece.side && p.id !== pieceId);
   const results = [];
   for (const mate of teammates) {
-    const direction = getStraightDirection(piece.row, piece.col, mate.row, mate.col);
-    if (!direction || direction.distance > maxDistance) continue;
+    const distance = circularDistance(piece.row, piece.col, mate.row, mate.col);
+    if (distance > maxDistance) continue;
 
+    const line = getLineCells(piece.row, piece.col, mate.row, mate.col).slice(1, -1);
     let blockingCount = 0;
-    for (const c of direction.intermediates) {
+    for (const c of line) {
       const occupants = getPiecesAtCell(gameState, c.row, c.col);
       blockingCount += anyPieceBlocks
         ? occupants.length
@@ -420,7 +428,7 @@ export function getShotInfo(gameState, pieceId) {
 
   const opponentSide = opponentOf(piece.side);
   const goalCell = getGoalCell(opponentSide, gameState);
-  const extendedRange = gameState.effects.extraRangePieceId === pieceId;
+  const extendedRange = gameState.effects.extraRangePieceIds.includes(pieceId);
   const maxDistance = extendedRange ? SHOOT_MAX_DISTANCE + 1 : SHOOT_MAX_DISTANCE;
   const distance = chebyshevDistance(piece.row, piece.col, goalCell.row, goalCell.col);
   if (distance > maxDistance) return { legal: false, distance };
@@ -648,13 +656,17 @@ function applyCardEffect(gameState, side, card, target) {
     case "sprint": {
       const piece = target && getPieceById(gameState, target.pieceId);
       if (!piece || piece.side !== side) return { ok: false, reason: "invalid_target" };
-      gameState.effects.extraMovementPieceId = piece.id;
+      if (!gameState.effects.extraMovementPieceIds.includes(piece.id)) {
+        gameState.effects.extraMovementPieceIds.push(piece.id);
+      }
       return { ok: true };
     }
     case "fernschuss": {
       const piece = target && getPieceById(gameState, target.pieceId);
       if (!piece || piece.side !== side) return { ok: false, reason: "invalid_target" };
-      gameState.effects.extraRangePieceId = piece.id;
+      if (!gameState.effects.extraRangePieceIds.includes(piece.id)) {
+        gameState.effects.extraRangePieceIds.push(piece.id);
+      }
       return { ok: true };
     }
     case "pressing": {
@@ -708,7 +720,6 @@ export function playCard(gameState, side, instanceId, target) {
   if (gameState.winner) return { ok: false, reason: "game_over" };
   if (gameState.pendingDiscard) return { ok: false, reason: "pending_discard" };
   if (getCurrentPlayer(gameState).side !== side) return { ok: false, reason: "not_your_turn" };
-  if (gameState.cardPlayedThisTurn) return { ok: false, reason: "card_already_played" };
 
   const pile = gameState.cardPiles[side];
   const handIndex = pile.hand.findIndex((c) => c.instanceId === instanceId);
@@ -720,7 +731,6 @@ export function playCard(gameState, side, instanceId, target) {
 
   pile.hand.splice(handIndex, 1);
   pile.discard.push(card);
-  gameState.cardPlayedThisTurn = true;
   return { ok: true, cardName: card.name, ...result };
 }
 

@@ -136,7 +136,7 @@ export function renderHand(handEl, opponentInfoEl, gameState, humanSide, selecte
   const pile = gameState.cardPiles[humanSide];
   const discardMode = gameState.pendingDiscard === humanSide;
   const current = getCurrentPlayer(gameState);
-  const canPlay = !discardMode && !gameState.winner && !current.isAI && !gameState.cardPlayedThisTurn;
+  const canPlay = !discardMode && !gameState.winner && !current.isAI;
 
   for (const card of pile.hand) {
     const tile = document.createElement("button");

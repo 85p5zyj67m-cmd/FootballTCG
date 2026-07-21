@@ -69,10 +69,10 @@ function tryPlayCard(gameState, aiSide) {
   return null;
 }
 
-// Spielt hoechstens 1 Karte (Regel: 1 Karte pro Zug) und loest eine dadurch
-// noetige Auszeit-Abwurfwahl direkt mit auf (einfachste verfuegbare Karte).
+// Spielt pro Aufruf hoechstens 1 Karte (der Aufrufer ruft erneut auf, um
+// ggf. weitere zu spielen - beliebig viele Karten/Zug sind erlaubt) und
+// loest eine dadurch noetige Auszeit-Abwurfwahl direkt mit auf.
 export function maybePlayAiCard(gameState, aiSide) {
-  if (gameState.cardPlayedThisTurn) return null;
   const choice = tryPlayCard(gameState, aiSide);
   if (!choice) return null;
 
