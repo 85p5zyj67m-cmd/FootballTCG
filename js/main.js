@@ -47,6 +47,7 @@ const cancelBtn = document.getElementById("cancel-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
 const handEl = document.getElementById("hand");
 const opponentHandInfoEl = document.getElementById("opponent-hand-info");
+const ownDeckInfoEl = document.getElementById("own-deck-info");
 const shotOverlayEl = document.getElementById("shot-overlay");
 const shotDieEl = document.getElementById("shot-die");
 const shotOutcomeEl = document.getElementById("shot-outcome");
@@ -256,7 +257,7 @@ function render() {
   renderBall(pitchEl, gameState);
   renderTurnIndicator(turnIndicatorEl, gameState);
   renderScore(scoreEl, gameState);
-  renderHand(handEl, opponentHandInfoEl, gameState, HUMAN_SIDE, selectedCard?.instanceId ?? null);
+  renderHand(handEl, opponentHandInfoEl, ownDeckInfoEl, gameState, HUMAN_SIDE, selectedCard?.instanceId ?? null);
   applyHighlights();
   updateActionBar();
 }

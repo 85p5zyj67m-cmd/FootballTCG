@@ -131,7 +131,7 @@ export function renderScore(el, gameState) {
   el.textContent = `Unten ${gameState.score[SIDE.BOTTOM]} : ${gameState.score[SIDE.TOP]} Oben`;
 }
 
-export function renderHand(handEl, opponentInfoEl, gameState, humanSide, selectedInstanceId) {
+export function renderHand(handEl, opponentInfoEl, ownDeckInfoEl, gameState, humanSide, selectedInstanceId) {
   handEl.innerHTML = "";
   const pile = gameState.cardPiles[humanSide];
   const discardMode = gameState.pendingDiscard === humanSide;
@@ -158,7 +158,9 @@ export function renderHand(handEl, opponentInfoEl, gameState, humanSide, selecte
     handEl.appendChild(tile);
   }
 
+  ownDeckInfoEl.textContent = `Dein Deck: ${pile.deck.length} Karten (${pile.discard.length} im Ablagestapel)`;
+
   const opponentSide = humanSide === SIDE.BOTTOM ? SIDE.TOP : SIDE.BOTTOM;
-  const opponentHandSize = gameState.cardPiles[opponentSide].hand.length;
-  opponentInfoEl.textContent = `Gegner-Hand: ${opponentHandSize} Karte(n)`;
+  const opponentPile = gameState.cardPiles[opponentSide];
+  opponentInfoEl.textContent = `Gegner-Hand: ${opponentPile.hand.length} Karte(n), Deck: ${opponentPile.deck.length}`;
 }
