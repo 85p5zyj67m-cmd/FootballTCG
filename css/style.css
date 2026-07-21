@@ -456,3 +456,96 @@ body {
 .card-discardable {
   border-color: #ff5c5c;
 }
+
+@media (max-width: 640px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 10px 14px;
+  }
+
+  .topbar h1 {
+    font-size: 1rem;
+    flex: 1 1 auto;
+  }
+
+  .new-game-btn {
+    order: 1;
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    padding: 5px 10px;
+  }
+
+  .score-board {
+    order: 2;
+    flex: 1 1 100%;
+    font-size: 0.95rem;
+  }
+
+  .turn-indicator {
+    order: 3;
+    flex: 1 1 100%;
+    font-size: 0.78rem;
+  }
+
+  .board-wrapper {
+    padding: 8px;
+  }
+
+  .action-bar {
+    padding: 8px 14px;
+    gap: 6px;
+  }
+
+  .message-line {
+    font-size: 0.8rem;
+  }
+
+  .action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .action-buttons button {
+    padding: 10px 6px;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+
+  .action-buttons button#end-turn-btn {
+    grid-column: 1 / -1;
+    margin-left: 0;
+  }
+
+  .action-buttons button#cancel-btn {
+    grid-column: 1 / -1;
+  }
+
+  .hand-bar {
+    padding: 8px 14px 12px;
+  }
+
+  .hand-info {
+    font-size: 0.7rem;
+  }
+
+  .hand {
+    scroll-snap-type: x mandatory;
+  }
+
+  .card {
+    width: 128px;
+    min-height: 60px;
+    padding: 6px 8px;
+    scroll-snap-align: start;
+  }
+
+  .card-name {
+    font-size: 0.82rem;
+  }
+
+  .card-desc {
+    font-size: 0.66rem;
+  }
+}
