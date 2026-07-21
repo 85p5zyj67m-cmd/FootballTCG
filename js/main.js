@@ -5,23 +5,30 @@ import {
   getLegalMoveCells,
   getLegalPassTargets,
   getLegalTackleTarget,
+  getLegalDefenderNudgeCells,
   getShotInfo,
   executeMove,
   executePass,
   executeTackle,
   executeShoot,
+  playCard,
+  resolveAuszeitDiscard,
   endTurnNow,
   ACTIONS_PER_TURN,
+  SIDE,
 } from "./gameLogic.js";
-import { performAiAction } from "./aiPlayer.js";
+import { performAiAction, maybePlayAiCard } from "./aiPlayer.js";
 import {
   renderPitch,
   renderPieces,
   renderBall,
   renderTurnIndicator,
   renderScore,
+  renderHand,
   fitPitchToViewport,
 } from "./boardRenderer.js";
+
+const HUMAN_SIDE = SIDE.BOTTOM;
 
 let gameState = createGameState();
 
@@ -37,9 +44,13 @@ const shootBtn = document.getElementById("shoot-btn");
 const tackleBtn = document.getElementById("tackle-btn");
 const cancelBtn = document.getElementById("cancel-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
+const handEl = document.getElementById("hand");
+const opponentHandInfoEl = document.getElementById("opponent-hand-info");
 
 let selectedPieceId = null;
 let actionMode = null; // "move" | "pass" | "tackle" | null
+let selectedCard = null; // Handkarte, die gerade ein Ziel braucht
+let cardTargetPieceId = null; // Zwischenschritt fuer Abwehrblock (Spieler gewaehlt, Feld noch offen)
 
 renderPitch(pitchEl, gameState);
 render();
@@ -61,6 +72,13 @@ const FAILURE_MESSAGES = {
   line_blocked: "Ein Spieler steht auf der Schusslinie.",
   no_ball: "Dieser Spieler hat den Ball nicht.",
   not_found: "Spieler nicht gefunden.",
+  invalid_target: "Ungueltiges Ziel fuer diese Karte.",
+  pending_discard: "Erst die Auszeit-Karte ablegen.",
+  card_already_played: "Du hast diesen Zug schon eine Karte gespielt.",
+  card_not_in_hand: "Karte nicht in der Hand.",
+  no_pending_discard: "Kein Ablegen erforderlich.",
+  not_a_defender: "Nur eigene Verteidiger koennen so bewegt werden.",
+  unknown_card: "Unbekannte Karte.",
 };
 
 function describeShotResult(result) {
@@ -84,17 +102,61 @@ function describeSuccess(type, result) {
   }
 }
 
+function deselect() {
+  selectedPieceId = null;
+  actionMode = null;
+  selectedCard = null;
+  cardTargetPieceId = null;
+}
+
 function clearHighlights() {
   pitchEl.querySelectorAll(".cell.move-target").forEach((el) => el.classList.remove("move-target"));
   pitchEl
-    .querySelectorAll(".piece.pass-target, .piece.tackle-target, .piece.selected")
-    .forEach((el) => el.classList.remove("pass-target", "tackle-target", "selected"));
+    .querySelectorAll(".cell.card-move-target")
+    .forEach((el) => el.classList.remove("card-move-target"));
+  pitchEl
+    .querySelectorAll(".piece.pass-target, .piece.tackle-target, .piece.card-target, .piece.selected")
+    .forEach((el) => el.classList.remove("pass-target", "tackle-target", "card-target", "selected"));
 }
 
 function applyHighlights() {
   clearHighlights();
-  if (!selectedPieceId) return;
 
+  if (selectedCard) {
+    if (selectedCard.targetType === "ownPiece") {
+      for (const piece of gameState.pieces.filter((p) => p.side === HUMAN_SIDE)) {
+        const el = pitchEl.querySelector(`.piece[data-piece-id="${piece.id}"]`);
+        if (el) el.classList.add("card-target");
+      }
+    } else if (selectedCard.targetType === "opponentPiece") {
+      const opponentSide = HUMAN_SIDE === SIDE.BOTTOM ? SIDE.TOP : SIDE.BOTTOM;
+      for (const piece of gameState.pieces.filter((p) => p.side === opponentSide)) {
+        const el = pitchEl.querySelector(`.piece[data-piece-id="${piece.id}"]`);
+        if (el) el.classList.add("card-target");
+      }
+    } else if (selectedCard.targetType === "ownDefenderMove") {
+      if (!cardTargetPieceId) {
+        for (const piece of gameState.pieces.filter(
+          (p) => p.side === HUMAN_SIDE && p.position === "DEF",
+        )) {
+          const el = pitchEl.querySelector(`.piece[data-piece-id="${piece.id}"]`);
+          if (el) el.classList.add("card-target");
+        }
+      } else {
+        const pieceEl = pitchEl.querySelector(`.piece[data-piece-id="${cardTargetPieceId}"]`);
+        if (pieceEl) pieceEl.classList.add("selected");
+        for (const cell of getLegalDefenderNudgeCells(gameState, cardTargetPieceId)) {
+          const cellEl = pitchEl.querySelector(
+            `.cell[data-row="${cell.row}"][data-col="${cell.col}"]`,
+          );
+          if (cellEl) cellEl.classList.add("card-move-target");
+        }
+      }
+    }
+    return;
+  }
+
+  if (!selectedPieceId) return;
   const pieceEl = pitchEl.querySelector(`.piece[data-piece-id="${selectedPieceId}"]`);
   if (pieceEl) pieceEl.classList.add("selected");
 
@@ -118,9 +180,15 @@ function applyHighlights() {
 }
 
 function updateActionBar() {
-  const piece = selectedPieceId ? getPieceById(gameState, selectedPieceId) : null;
   const current = getCurrentPlayer(gameState);
-  const isControllable = piece && !current.isAI && piece.side === current.side && !gameState.winner;
+  const piece = selectedPieceId ? getPieceById(gameState, selectedPieceId) : null;
+  const isControllable =
+    !selectedCard &&
+    piece &&
+    !current.isAI &&
+    piece.side === current.side &&
+    !gameState.winner &&
+    !gameState.pendingDiscard;
   const hasBall = piece && gameState.ball.possessorId === piece.id;
 
   moveBtn.disabled = !isControllable || getLegalMoveCells(gameState, piece?.id).length === 0;
@@ -128,8 +196,8 @@ function updateActionBar() {
     !isControllable || !hasBall || getLegalPassTargets(gameState, piece?.id).length === 0;
   shootBtn.disabled = !isControllable || !hasBall || !getShotInfo(gameState, piece?.id).legal;
   tackleBtn.disabled = !isControllable || !getLegalTackleTarget(gameState, piece?.id);
-  cancelBtn.disabled = !selectedPieceId;
-  endTurnBtn.disabled = current.isAI || Boolean(gameState.winner);
+  cancelBtn.disabled = !selectedPieceId && !selectedCard;
+  endTurnBtn.disabled = current.isAI || Boolean(gameState.winner) || Boolean(gameState.pendingDiscard);
 }
 
 function render() {
@@ -137,13 +205,9 @@ function render() {
   renderBall(pitchEl, gameState);
   renderTurnIndicator(turnIndicatorEl, gameState);
   renderScore(scoreEl, gameState);
+  renderHand(handEl, opponentHandInfoEl, gameState, HUMAN_SIDE, selectedCard?.instanceId ?? null);
   applyHighlights();
   updateActionBar();
-}
-
-function deselect() {
-  selectedPieceId = null;
-  actionMode = null;
 }
 
 function handleActionResult(result, type) {
@@ -157,11 +221,56 @@ function handleActionResult(result, type) {
   maybeTriggerAiTurn();
 }
 
+function handleCardResult(result, card) {
+  if (!result.ok) {
+    setMessage(FAILURE_MESSAGES[result.reason] || "Karte konnte nicht gespielt werden.");
+    return;
+  }
+  setMessage(`Karte gespielt: ${card.name}.`);
+  deselect();
+  render();
+}
+
 pitchEl.addEventListener("click", (event) => {
   if (gameState.winner || getCurrentPlayer(gameState).isAI) return;
 
   const pieceEl = event.target.closest(".piece");
   const cellEl = event.target.closest(".cell");
+
+  if (selectedCard) {
+    if (
+      (selectedCard.targetType === "ownPiece" || selectedCard.targetType === "opponentPiece") &&
+      pieceEl &&
+      pieceEl.classList.contains("card-target")
+    ) {
+      handleCardResult(
+        playCard(gameState, HUMAN_SIDE, selectedCard.instanceId, { pieceId: pieceEl.dataset.pieceId }),
+        selectedCard,
+      );
+      return;
+    }
+    if (selectedCard.targetType === "ownDefenderMove") {
+      if (!cardTargetPieceId && pieceEl && pieceEl.classList.contains("card-target")) {
+        cardTargetPieceId = pieceEl.dataset.pieceId;
+        render();
+        return;
+      }
+      if (cardTargetPieceId && cellEl && cellEl.classList.contains("card-move-target")) {
+        const row = Number(cellEl.dataset.row);
+        const col = Number(cellEl.dataset.col);
+        handleCardResult(
+          playCard(gameState, HUMAN_SIDE, selectedCard.instanceId, {
+            pieceId: cardTargetPieceId,
+            row,
+            col,
+          }),
+          selectedCard,
+        );
+        return;
+      }
+    }
+    return;
+  }
 
   if (actionMode === "move" && cellEl && cellEl.classList.contains("move-target")) {
     const row = Number(cellEl.dataset.row);
@@ -231,6 +340,39 @@ newGameBtn.addEventListener("click", () => {
   render();
 });
 
+handEl.addEventListener("click", (event) => {
+  const tile = event.target.closest(".card");
+  if (!tile || tile.disabled) return;
+  const instanceId = tile.dataset.instanceId;
+
+  if (gameState.pendingDiscard === HUMAN_SIDE) {
+    const result = resolveAuszeitDiscard(gameState, HUMAN_SIDE, instanceId);
+    if (!result.ok) {
+      setMessage(FAILURE_MESSAGES[result.reason] || "Ablegen fehlgeschlagen.");
+      return;
+    }
+    setMessage("Karte abgelegt.");
+    render();
+    return;
+  }
+
+  if (gameState.winner || getCurrentPlayer(gameState).isAI || gameState.cardPlayedThisTurn) return;
+
+  const card = gameState.cardPiles[HUMAN_SIDE].hand.find((c) => c.instanceId === instanceId);
+  if (!card) return;
+
+  if (card.targetType === "none") {
+    handleCardResult(playCard(gameState, HUMAN_SIDE, card.instanceId, null), card);
+    return;
+  }
+
+  selectedPieceId = null;
+  actionMode = null;
+  cardTargetPieceId = null;
+  selectedCard = card;
+  render();
+});
+
 function maybeTriggerAiTurn() {
   if (gameState.winner) return;
   if (!getCurrentPlayer(gameState).isAI) return;
@@ -240,6 +382,16 @@ function maybeTriggerAiTurn() {
 function runAiStep() {
   const current = getCurrentPlayer(gameState);
   if (!current.isAI || gameState.winner) return;
+
+  if (!gameState.cardPlayedThisTurn) {
+    const cardResult = maybePlayAiCard(gameState, current.side);
+    if (cardResult) {
+      setMessage(`KI spielt Karte: ${cardResult.cardName}.`);
+      render();
+      setTimeout(runAiStep, 700);
+      return;
+    }
+  }
 
   const result = performAiAction(gameState, current.side);
   if (!result.ok) {

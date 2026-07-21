@@ -130,3 +130,35 @@ export function renderTurnIndicator(el, gameState) {
 export function renderScore(el, gameState) {
   el.textContent = `Unten ${gameState.score[SIDE.BOTTOM]} : ${gameState.score[SIDE.TOP]} Oben`;
 }
+
+export function renderHand(handEl, opponentInfoEl, gameState, humanSide, selectedInstanceId) {
+  handEl.innerHTML = "";
+  const pile = gameState.cardPiles[humanSide];
+  const discardMode = gameState.pendingDiscard === humanSide;
+  const current = getCurrentPlayer(gameState);
+  const canPlay = !discardMode && !gameState.winner && !current.isAI && !gameState.cardPlayedThisTurn;
+
+  for (const card of pile.hand) {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = `card card-${card.category}`;
+    if (card.instanceId === selectedInstanceId) tile.classList.add("card-selected");
+    if (discardMode) tile.classList.add("card-discardable");
+    tile.disabled = !discardMode && !canPlay;
+    tile.dataset.instanceId = card.instanceId;
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "card-name";
+    nameEl.textContent = card.name;
+    const descEl = document.createElement("span");
+    descEl.className = "card-desc";
+    descEl.textContent = card.description;
+    tile.append(nameEl, descEl);
+
+    handEl.appendChild(tile);
+  }
+
+  const opponentSide = humanSide === SIDE.BOTTOM ? SIDE.TOP : SIDE.BOTTOM;
+  const opponentHandSize = gameState.cardPiles[opponentSide].hand.length;
+  opponentInfoEl.textContent = `Gegner-Hand: ${opponentHandSize} Karte(n)`;
+}

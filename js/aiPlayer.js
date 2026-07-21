@@ -15,6 +15,8 @@ import {
   executePass,
   executeTackle,
   executeShoot,
+  playCard,
+  resolveAuszeitDiscard,
 } from "./gameLogic.js";
 
 function opponentOf(side) {
@@ -32,6 +34,56 @@ function closestCellTo(cells, targetRow, targetCol) {
     }
   }
   return best;
+}
+
+// Sehr einfache Kartenwahl - deckt nicht jede Karte ab, sondern nur die
+// Faelle, in denen der Nutzen fuer die KI offensichtlich/eindeutig ist:
+// - Torwartparade proaktiv, solange noch nicht aktiv und der Gegner den
+//   Ball hat (bereitet den naechsten gegnerischen Schuss vor).
+// - Teamwork, wenn die KI selbst den Ball haelt (mehr Handlungsspielraum).
+// - Sprint auf den eigenen Ballfuehrer, um schneller Richtung Tor zu kommen.
+// Alle anderen Karten haelt die KI zurueck bzw. spielt sie gar nicht aus.
+function tryPlayCard(gameState, aiSide) {
+  const hand = gameState.cardPiles[aiSide].hand;
+  if (hand.length === 0) return null;
+
+  const carrierId = gameState.ball.possessorId;
+  const carrier = carrierId ? getPieceById(gameState, carrierId) : null;
+  const iHaveBall = Boolean(carrier && carrier.side === aiSide);
+
+  const torwartparade = hand.find((c) => c.cardId === "torwartparade");
+  if (torwartparade && !iHaveBall && gameState.effects.keeperBoostSide !== aiSide) {
+    return { instanceId: torwartparade.instanceId, target: null };
+  }
+
+  const teamwork = hand.find((c) => c.cardId === "teamwork");
+  if (teamwork && iHaveBall) {
+    return { instanceId: teamwork.instanceId, target: null };
+  }
+
+  const sprint = hand.find((c) => c.cardId === "sprint");
+  if (sprint && iHaveBall) {
+    return { instanceId: sprint.instanceId, target: { pieceId: carrier.id } };
+  }
+
+  return null;
+}
+
+// Spielt hoechstens 1 Karte (Regel: 1 Karte pro Zug) und loest eine dadurch
+// noetige Auszeit-Abwurfwahl direkt mit auf (einfachste verfuegbare Karte).
+export function maybePlayAiCard(gameState, aiSide) {
+  if (gameState.cardPlayedThisTurn) return null;
+  const choice = tryPlayCard(gameState, aiSide);
+  if (!choice) return null;
+
+  const result = playCard(gameState, aiSide, choice.instanceId, choice.target);
+  if (result.ok && gameState.pendingDiscard === aiSide) {
+    const hand = gameState.cardPiles[aiSide].hand;
+    if (hand.length > 0) {
+      resolveAuszeitDiscard(gameState, aiSide, hand[0].instanceId);
+    }
+  }
+  return result.ok ? { ...result, type: "card" } : null;
 }
 
 // Entscheidet eine einzelne Aktion fuer die KI-Seite. Prioritaet:

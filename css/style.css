@@ -356,3 +356,103 @@ body {
 .action-buttons button#end-turn-btn:hover {
   background: #5a3232;
 }
+
+.piece.card-target {
+  cursor: pointer;
+  animation: pulse-target 1s ease-in-out infinite;
+  outline: max(3px, calc(var(--cell-size) * 0.06)) solid #c98cff;
+  outline-offset: 2px;
+}
+
+.cell.card-move-target {
+  cursor: pointer;
+}
+
+.cell.card-move-target::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: rgba(201, 140, 255, 0.4);
+  border: 2px solid rgba(201, 140, 255, 0.9);
+  pointer-events: none;
+}
+
+.hand-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 32px 16px;
+  background: #14191d;
+  border-top: 1px solid #2a373c;
+}
+
+.hand-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #8fa0a6;
+}
+
+.hand {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.card {
+  flex: 0 0 auto;
+  width: 150px;
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  color: #fff;
+}
+
+.card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.card-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.card-desc {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  opacity: 0.9;
+}
+
+.card-offense {
+  background: #5a1f1f;
+  border-color: #8a2f2f;
+}
+
+.card-defense {
+  background: #1f3a5a;
+  border-color: #2f5a8a;
+}
+
+.card-tactic {
+  background: #1f5a2f;
+  border-color: #2f8a45;
+}
+
+.card-selected {
+  border-color: #ffe45c;
+  box-shadow: 0 0 0 2px rgba(255, 228, 92, 0.4);
+}
+
+.card-discardable {
+  border-color: #ff5c5c;
+}
