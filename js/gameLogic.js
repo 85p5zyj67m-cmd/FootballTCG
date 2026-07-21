@@ -21,7 +21,7 @@ export const PIECES_PER_TEAM = 11;
 export const MAX_PIECES_PER_CELL = 1; // "Zwei Spieler duerfen niemals auf demselben Feld stehen."
 export const ACTIONS_PER_TURN = 2;
 export const MOVE_MAX_DISTANCE = 4; // kreisfoermiger Radius (Luftlinie), wie beim Passen
-export const PASS_MAX_DISTANCE = 4; // kreisfoermiger Radius (Luftlinie), nicht auf die 8 Richtungen beschraenkt
+export const PASS_MAX_DISTANCE = 4; // quadratischer Bereich (Chebyshev-Distanz): 4 Felder in jede der 8 Richtungen
 export const SHOOT_MAX_DISTANCE = 3;
 export const WINNING_SCORE = 3;
 export const STARTING_HAND_SIZE = 4;
@@ -429,7 +429,11 @@ export function getLegalPassTargets(gameState, pieceId) {
   const teammates = gameState.pieces.filter((p) => p.side === piece.side && p.id !== pieceId);
   const results = [];
   for (const mate of teammates) {
-    const distance = circularDistance(piece.row, piece.col, mate.row, mate.col);
+    // Quadratischer Bereich: 4 Felder in jede der 8 Richtungen definieren die
+    // Eckpunkte eines Quadrats um den Passgeber - Chebyshev-Distanz, nicht
+    // Luftlinie, sonst waeren die diagonalen Ecken (z.B. 4 rechts + 4 hoch)
+    // ausserhalb der Reichweite.
+    const distance = chebyshevDistance(piece.row, piece.col, mate.row, mate.col);
     if (distance > maxDistance) continue;
 
     const line = getLineCells(piece.row, piece.col, mate.row, mate.col).slice(1, -1);
