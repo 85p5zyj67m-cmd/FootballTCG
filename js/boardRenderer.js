@@ -1,7 +1,7 @@
 // Spielseitenlayout: erzeugt und aktualisiert das DOM auf Basis des
 // Spielzustands aus gameLogic.js. Enthaelt selbst keine Spielregeln.
 
-import { SIDE, GOAL_COLUMN } from "./gameLogic.js";
+import { SIDE, GOAL_COLUMN, ACTIONS_PER_TURN, getCurrentPlayer } from "./gameLogic.js";
 
 function addPitchMarking(container, className) {
   const marking = document.createElement("div");
@@ -87,33 +87,18 @@ export function fitPitchToViewport(wrapperEl, gameState) {
 
 export function renderPieces(container, gameState) {
   container.querySelectorAll(".piece").forEach((el) => el.remove());
-  container.querySelectorAll(".cell.crowded").forEach((el) => el.classList.remove("crowded"));
 
-  const piecesByCell = new Map();
   for (const piece of gameState.pieces) {
-    const key = `${piece.row},${piece.col}`;
-    if (!piecesByCell.has(key)) {
-      piecesByCell.set(key, []);
-    }
-    piecesByCell.get(key).push(piece);
-  }
-
-  for (const [key, pieces] of piecesByCell) {
-    const [row, col] = key.split(",");
-    const cell = container.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    const cell = container.querySelector(
+      `.cell[data-row="${piece.row}"][data-col="${piece.col}"]`,
+    );
     if (!cell) continue;
 
-    if (pieces.length > 1) {
-      cell.classList.add("crowded");
-    }
-
-    for (const piece of pieces) {
-      const token = document.createElement("div");
-      token.className = `piece team-${piece.side}`;
-      token.dataset.pieceId = piece.id;
-      token.textContent = piece.id.split("-")[1];
-      cell.appendChild(token);
-    }
+    const token = document.createElement("div");
+    token.className = `piece team-${piece.side} role-${piece.role}`;
+    token.dataset.pieceId = piece.id;
+    token.textContent = piece.id.split("-")[1];
+    cell.appendChild(token);
   }
 }
 
@@ -130,8 +115,18 @@ export function renderBall(container, gameState) {
 }
 
 export function renderTurnIndicator(el, gameState) {
-  const current = gameState.players.find((p) => p.id === gameState.currentPlayerId);
+  if (gameState.winner) {
+    const winnerLabel = gameState.winner === SIDE.BOTTOM ? "Unten" : "Oben";
+    el.textContent = `Spiel vorbei - Team ${winnerLabel} gewinnt!`;
+    return;
+  }
+
+  const current = getCurrentPlayer(gameState);
   const sideLabel = current.side === SIDE.BOTTOM ? "unten" : "oben";
-  const youLabel = current.id === gameState.localPlayerId ? " (du)" : "";
-  el.textContent = `Spieler ${current.id} (${sideLabel})${youLabel} ist am Zug`;
+  const youLabel = current.isAI ? " (KI)" : current.id === gameState.localPlayerId ? " (du)" : "";
+  el.textContent = `Spieler ${current.id} (${sideLabel})${youLabel} ist am Zug - Aktionen: ${gameState.actionsRemaining}/${ACTIONS_PER_TURN}`;
+}
+
+export function renderScore(el, gameState) {
+  el.textContent = `Unten ${gameState.score[SIDE.BOTTOM]} : ${gameState.score[SIDE.TOP]} Oben`;
 }

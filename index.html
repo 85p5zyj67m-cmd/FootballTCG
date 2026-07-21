@@ -9,12 +9,26 @@
 <body>
   <header class="topbar">
     <h1>Football TCG</h1>
+    <div class="score-board" id="score-board">Unten 0 : 0 Oben</div>
     <div class="turn-indicator" id="turn-indicator">Spieler 1 (unten) ist am Zug</div>
+    <button class="new-game-btn" id="new-game-btn" type="button">Neues Spiel</button>
   </header>
 
   <main class="board-wrapper">
     <div class="pitch" id="pitch"></div>
   </main>
+
+  <footer class="action-bar">
+    <div class="message-line" id="message-line">Waehle einen deiner Spieler aus.</div>
+    <div class="action-buttons">
+      <button data-action="move" id="move-btn" type="button" disabled>Bewegen</button>
+      <button data-action="pass" id="pass-btn" type="button" disabled>Passen</button>
+      <button data-action="shoot" id="shoot-btn" type="button" disabled>Schiessen</button>
+      <button data-action="tackle" id="tackle-btn" type="button" disabled>Tackeln</button>
+      <button data-action="cancel" id="cancel-btn" type="button" disabled>Abbrechen</button>
+      <button data-action="end-turn" id="end-turn-btn" type="button">Zug beenden</button>
+    </div>
+  </footer>
 
   <script type="module" src="js/main.js"></script>
 </body>

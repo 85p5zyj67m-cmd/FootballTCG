@@ -30,6 +30,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   padding: 16px 32px;
   background: #182226;
   border-bottom: 1px solid #2a373c;
@@ -40,9 +41,29 @@ body {
   margin: 0;
 }
 
+.score-board {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .turn-indicator {
   font-size: 0.95rem;
   color: #c9d6da;
+}
+
+.new-game-btn {
+  background: #2a373c;
+  color: #f0f0f0;
+  border: 1px solid #3a4a50;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.new-game-btn:hover {
+  background: #34444a;
 }
 
 .board-wrapper {
@@ -84,9 +105,18 @@ body {
   border-top: 2px solid var(--line-color);
 }
 
-.cell.drag-over {
-  outline: 2px dashed #ffffff;
-  outline-offset: -2px;
+.cell.move-target {
+  cursor: pointer;
+}
+
+.cell.move-target::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  pointer-events: none;
 }
 
 .pitch-marking {
@@ -191,17 +221,12 @@ body {
   font-size: calc(var(--cell-size) * 0.32);
   border: 2px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  cursor: grab;
-  touch-action: none;
+  cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
-}
-
-.piece:active {
-  cursor: grabbing;
 }
 
 .piece.selected {
@@ -210,10 +235,30 @@ body {
   transform: scale(1.08);
 }
 
-.cell.crowded .piece {
-  width: 44%;
-  height: 44%;
-  font-size: calc(var(--cell-size) * 0.22);
+.piece.pass-target,
+.piece.tackle-target {
+  cursor: pointer;
+  animation: pulse-target 1s ease-in-out infinite;
+}
+
+.piece.pass-target {
+  outline: max(3px, calc(var(--cell-size) * 0.06)) solid #4fd6ff;
+  outline-offset: 2px;
+}
+
+.piece.tackle-target {
+  outline: max(3px, calc(var(--cell-size) * 0.06)) solid #ff5c5c;
+  outline-offset: 2px;
+}
+
+@keyframes pulse-target {
+  0%, 100% { outline-offset: 2px; }
+  50% { outline-offset: 5px; }
+}
+
+.piece.role-gk {
+  border-color: #ffd23f;
+  border-width: 3px;
 }
 
 .piece.team-bottom {
@@ -222,10 +267,6 @@ body {
 
 .piece.team-top {
   background: #e6483c;
-}
-
-.piece-dragging {
-  opacity: 0.25;
 }
 
 .ball {
@@ -239,29 +280,7 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.45);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   z-index: 4;
-  cursor: grab;
-  touch-action: none;
-}
-
-.ball:active {
-  cursor: grabbing;
-}
-
-.ball.selected {
-  outline: max(2px, calc(var(--cell-size) * 0.05)) solid #ffe45c;
-  outline-offset: 2px;
-}
-
-.ball-dragging {
-  opacity: 0.25;
-}
-
-.drag-ghost {
-  position: fixed;
   pointer-events: none;
-  z-index: 1000;
-  transform: translate(-50%, -50%);
-  opacity: 0.9;
 }
 
 .goal-zone {
@@ -285,4 +304,55 @@ body {
 
 .goal-zone.bottom {
   border-bottom: 2px solid var(--line-color);
+}
+
+.action-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 32px;
+  background: #182226;
+  border-top: 1px solid #2a373c;
+}
+
+.message-line {
+  font-size: 0.9rem;
+  color: #c9d6da;
+  min-height: 1.2em;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.action-buttons button {
+  background: #2a373c;
+  color: #f0f0f0;
+  border: 1px solid #3a4a50;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.action-buttons button:hover:not(:disabled) {
+  background: #3a4a50;
+}
+
+.action-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action-buttons button#end-turn-btn {
+  margin-left: auto;
+  background: #4a2a2a;
+  border-color: #6a3a3a;
+}
+
+.action-buttons button#end-turn-btn:hover {
+  background: #5a3232;
 }

@@ -1,186 +1,258 @@
-import { createGameState, movePiece, moveBall } from "./gameLogic.js";
+import {
+  createGameState,
+  getCurrentPlayer,
+  getPieceById,
+  getLegalMoveCells,
+  getLegalPassTargets,
+  getLegalTackleTarget,
+  getShotInfo,
+  executeMove,
+  executePass,
+  executeTackle,
+  executeShoot,
+  endTurnNow,
+  ACTIONS_PER_TURN,
+} from "./gameLogic.js";
+import { performAiAction } from "./aiPlayer.js";
 import {
   renderPitch,
   renderPieces,
   renderBall,
   renderTurnIndicator,
+  renderScore,
   fitPitchToViewport,
 } from "./boardRenderer.js";
 
-const gameState = createGameState();
+let gameState = createGameState();
 
 const pitchEl = document.getElementById("pitch");
 const turnIndicatorEl = document.getElementById("turn-indicator");
+const scoreEl = document.getElementById("score-board");
+const messageEl = document.getElementById("message-line");
 const boardWrapperEl = document.querySelector(".board-wrapper");
+const newGameBtn = document.getElementById("new-game-btn");
+const moveBtn = document.getElementById("move-btn");
+const passBtn = document.getElementById("pass-btn");
+const shootBtn = document.getElementById("shoot-btn");
+const tackleBtn = document.getElementById("tackle-btn");
+const cancelBtn = document.getElementById("cancel-btn");
+const endTurnBtn = document.getElementById("end-turn-btn");
+
+let selectedPieceId = null;
+let actionMode = null; // "move" | "pass" | "tackle" | null
 
 renderPitch(pitchEl, gameState);
-renderPieces(pitchEl, gameState);
-renderBall(pitchEl, gameState);
-renderTurnIndicator(turnIndicatorEl, gameState);
+render();
 fitPitchToViewport(boardWrapperEl, gameState);
-
 window.addEventListener("resize", () => fitPitchToViewport(boardWrapperEl, gameState));
 
-// Verschieben von Spielern UND Ball per Pointer-Events (mousedown -> mousemove
-// -> mouseup). Auf Touchgeraeten kann ein Objekt stattdessen per Tippen
-// ausgewaehlt und anschliessend durch Tippen auf ein Zielfeld bewegt werden.
-let selectedItem = null;
-let draggedItem = null;
-let ghostEl = null;
-let hoveredCell = null;
-let dragStartX = 0;
-let dragStartY = 0;
-let didDrag = false;
-
-function sameItem(a, b) {
-  if (!a || !b) return a === b;
-  return a.type === b.type && a.id === b.id;
+function setMessage(text) {
+  messageEl.textContent = text;
 }
 
-function renderGame() {
+const FAILURE_MESSAGES = {
+  not_your_turn: "Das ist nicht dein Spieler.",
+  no_actions_left: "Keine Aktionen mehr in diesem Zug.",
+  game_over: "Das Spiel ist bereits vorbei.",
+  illegal_move: "Diese Bewegung ist nicht erlaubt.",
+  illegal_pass: "Dieser Pass ist nicht erlaubt.",
+  illegal_tackle: "Tackling hier nicht moeglich.",
+  out_of_range: "Zu weit vom Tor entfernt.",
+  line_blocked: "Ein Spieler steht auf der Schusslinie.",
+  no_ball: "Dieser Spieler hat den Ball nicht.",
+  not_found: "Spieler nicht gefunden.",
+};
+
+function describeShotResult(result) {
+  const modifierText = result.modifier ? ` (Modifikator ${result.modifier})` : "";
+  const outcomeText = result.outcome === "goal" ? "TOR!" : "Fehlschuss - Torwart haelt den Ball.";
+  return `Schuss aus ${result.distance} Feld(ern), benoetigt ${result.needed}+, gewuerfelt ${result.roll}${modifierText} -> ${outcomeText}`;
+}
+
+function describeSuccess(type, result) {
+  switch (type) {
+    case "move":
+      return "Spieler bewegt.";
+    case "pass":
+      return "Pass gespielt.";
+    case "tackle":
+      return "Tackling! Der Ball ist jetzt frei.";
+    case "shoot":
+      return describeShotResult(result);
+    default:
+      return "";
+  }
+}
+
+function clearHighlights() {
+  pitchEl.querySelectorAll(".cell.move-target").forEach((el) => el.classList.remove("move-target"));
+  pitchEl
+    .querySelectorAll(".piece.pass-target, .piece.tackle-target, .piece.selected")
+    .forEach((el) => el.classList.remove("pass-target", "tackle-target", "selected"));
+}
+
+function applyHighlights() {
+  clearHighlights();
+  if (!selectedPieceId) return;
+
+  const pieceEl = pitchEl.querySelector(`.piece[data-piece-id="${selectedPieceId}"]`);
+  if (pieceEl) pieceEl.classList.add("selected");
+
+  if (actionMode === "move") {
+    for (const cell of getLegalMoveCells(gameState, selectedPieceId)) {
+      const cellEl = pitchEl.querySelector(`.cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+      if (cellEl) cellEl.classList.add("move-target");
+    }
+  } else if (actionMode === "pass") {
+    for (const id of getLegalPassTargets(gameState, selectedPieceId)) {
+      const targetEl = pitchEl.querySelector(`.piece[data-piece-id="${id}"]`);
+      if (targetEl) targetEl.classList.add("pass-target");
+    }
+  } else if (actionMode === "tackle") {
+    const targetId = getLegalTackleTarget(gameState, selectedPieceId);
+    if (targetId) {
+      const targetEl = pitchEl.querySelector(`.piece[data-piece-id="${targetId}"]`);
+      if (targetEl) targetEl.classList.add("tackle-target");
+    }
+  }
+}
+
+function updateActionBar() {
+  const piece = selectedPieceId ? getPieceById(gameState, selectedPieceId) : null;
+  const current = getCurrentPlayer(gameState);
+  const isControllable = piece && !current.isAI && piece.side === current.side && !gameState.winner;
+  const hasBall = piece && gameState.ball.possessorId === piece.id;
+
+  moveBtn.disabled = !isControllable || getLegalMoveCells(gameState, piece?.id).length === 0;
+  passBtn.disabled =
+    !isControllable || !hasBall || getLegalPassTargets(gameState, piece?.id).length === 0;
+  shootBtn.disabled = !isControllable || !hasBall || !getShotInfo(gameState, piece?.id).legal;
+  tackleBtn.disabled = !isControllable || !getLegalTackleTarget(gameState, piece?.id);
+  cancelBtn.disabled = !selectedPieceId;
+  endTurnBtn.disabled = current.isAI || Boolean(gameState.winner);
+}
+
+function render() {
   renderPieces(pitchEl, gameState);
   renderBall(pitchEl, gameState);
   renderTurnIndicator(turnIndicatorEl, gameState);
-  applySelection();
+  renderScore(scoreEl, gameState);
+  applyHighlights();
+  updateActionBar();
 }
 
-function applySelection() {
-  pitchEl.querySelectorAll(".piece.selected, .ball.selected").forEach((el) => {
-    el.classList.remove("selected");
-  });
-
-  if (!selectedItem) return;
-  const selectedEl =
-    selectedItem.type === "piece"
-      ? pitchEl.querySelector(`.piece[data-piece-id="${selectedItem.id}"]`)
-      : pitchEl.querySelector(".ball");
-  if (selectedEl) selectedEl.classList.add("selected");
+function deselect() {
+  selectedPieceId = null;
+  actionMode = null;
 }
 
-function selectItem(item) {
-  selectedItem = sameItem(selectedItem, item) ? null : item;
-  applySelection();
-}
-
-function moveSelectedItem(cell) {
-  if (!selectedItem || !cell) return;
-
-  const row = Number(cell.dataset.row);
-  const col = Number(cell.dataset.col);
-  if (selectedItem.type === "piece") {
-    movePiece(gameState, selectedItem.id, row, col);
-  } else {
-    moveBall(gameState, row, col);
+function handleActionResult(result, type) {
+  if (!result.ok) {
+    setMessage(FAILURE_MESSAGES[result.reason] || "Aktion nicht moeglich.");
+    return;
   }
-  selectedItem = null;
-  renderGame();
+  setMessage(describeSuccess(type, result));
+  deselect();
+  render();
+  maybeTriggerAiTurn();
 }
 
-function startDrag(item, token, pointerX, pointerY) {
-  draggedItem = item;
-  dragStartX = pointerX;
-  dragStartY = pointerY;
-  didDrag = false;
+pitchEl.addEventListener("click", (event) => {
+  if (gameState.winner || getCurrentPlayer(gameState).isAI) return;
 
-  const rect = token.getBoundingClientRect();
-  ghostEl = token.cloneNode(true);
-  ghostEl.classList.remove("selected");
-  ghostEl.classList.add("drag-ghost");
-  ghostEl.style.width = `${rect.width}px`;
-  ghostEl.style.height = `${rect.height}px`;
-  ghostEl.style.position = "fixed";
-  ghostEl.style.bottom = "auto";
-  ghostEl.style.right = "auto";
-  document.body.appendChild(ghostEl);
-  moveGhostTo(pointerX, pointerY);
+  const pieceEl = event.target.closest(".piece");
+  const cellEl = event.target.closest(".cell");
 
-  token.classList.add(item.type === "piece" ? "piece-dragging" : "ball-dragging");
-}
-
-function moveGhostTo(pointerX, pointerY) {
-  if (!ghostEl) return;
-  ghostEl.style.left = `${pointerX}px`;
-  ghostEl.style.top = `${pointerY}px`;
-}
-
-function setHoveredCell(cell) {
-  if (hoveredCell === cell) return;
-  if (hoveredCell) hoveredCell.classList.remove("drag-over");
-  hoveredCell = cell;
-  if (hoveredCell) hoveredCell.classList.add("drag-over");
-}
-
-function endDrag(pointerX, pointerY) {
-  if (hoveredCell) hoveredCell.classList.remove("drag-over");
-  hoveredCell = null;
-
-  if (ghostEl) {
-    ghostEl.remove();
-    ghostEl = null;
+  if (actionMode === "move" && cellEl && cellEl.classList.contains("move-target")) {
+    const row = Number(cellEl.dataset.row);
+    const col = Number(cellEl.dataset.col);
+    handleActionResult(executeMove(gameState, selectedPieceId, row, col), "move");
+    return;
   }
 
-  if (didDrag) {
-    const dropTarget = document.elementFromPoint(pointerX, pointerY);
-    const cell = dropTarget ? dropTarget.closest(".cell") : null;
-    if (cell) {
-      const row = Number(cell.dataset.row);
-      const col = Number(cell.dataset.col);
-      if (draggedItem.type === "piece") {
-        movePiece(gameState, draggedItem.id, row, col);
-      } else {
-        moveBall(gameState, row, col);
-      }
-      selectedItem = null;
+  if (actionMode === "pass" && pieceEl && pieceEl.classList.contains("pass-target")) {
+    handleActionResult(executePass(gameState, selectedPieceId, pieceEl.dataset.pieceId), "pass");
+    return;
+  }
+
+  if (actionMode === "tackle" && pieceEl && pieceEl.classList.contains("tackle-target")) {
+    handleActionResult(executeTackle(gameState, selectedPieceId), "tackle");
+    return;
+  }
+
+  if (pieceEl) {
+    const pieceId = pieceEl.dataset.pieceId;
+    const piece = getPieceById(gameState, pieceId);
+    if (piece.side !== getCurrentPlayer(gameState).side) {
+      setMessage("Das ist nicht dein Spieler.");
+      return;
     }
-  } else {
-    selectItem(draggedItem);
+    selectedPieceId = pieceId === selectedPieceId ? null : pieceId;
+    actionMode = null;
+    render();
+    return;
   }
 
-  draggedItem = null;
-  renderGame();
+  deselect();
+  render();
+});
+
+moveBtn.addEventListener("click", () => {
+  actionMode = "move";
+  render();
+});
+passBtn.addEventListener("click", () => {
+  actionMode = "pass";
+  render();
+});
+tackleBtn.addEventListener("click", () => {
+  actionMode = "tackle";
+  render();
+});
+cancelBtn.addEventListener("click", () => {
+  deselect();
+  render();
+});
+shootBtn.addEventListener("click", () => {
+  handleActionResult(executeShoot(gameState, selectedPieceId), "shoot");
+});
+endTurnBtn.addEventListener("click", () => {
+  if (getCurrentPlayer(gameState).isAI || gameState.winner) return;
+  endTurnNow(gameState);
+  deselect();
+  setMessage("Zug beendet.");
+  render();
+  maybeTriggerAiTurn();
+});
+newGameBtn.addEventListener("click", () => {
+  gameState = createGameState();
+  deselect();
+  setMessage("Neues Spiel gestartet.");
+  render();
+});
+
+function maybeTriggerAiTurn() {
+  if (gameState.winner) return;
+  if (!getCurrentPlayer(gameState).isAI) return;
+  setTimeout(runAiStep, 700);
 }
 
-pitchEl.addEventListener("pointerdown", (event) => {
-  const pieceToken = event.target.closest(".piece");
-  const ballToken = !pieceToken ? event.target.closest(".ball") : null;
-  const token = pieceToken || ballToken;
-  if (!token) return;
+function runAiStep() {
+  const current = getCurrentPlayer(gameState);
+  if (!current.isAI || gameState.winner) return;
 
-  event.preventDefault();
-  const item = pieceToken
-    ? { type: "piece", id: pieceToken.dataset.pieceId }
-    : { type: "ball" };
-  startDrag(item, token, event.clientX, event.clientY);
-});
+  const result = performAiAction(gameState, current.side);
+  if (!result.ok) {
+    endTurnNow(gameState);
+    setMessage("KI konnte keine Aktion ausfuehren, Zug beendet.");
+    render();
+    return;
+  }
 
-window.addEventListener("pointermove", (event) => {
-  if (!draggedItem) return;
+  setMessage(`KI: ${describeSuccess(result.type, result)}`);
+  render();
 
-  const distance = Math.hypot(
-    event.clientX - dragStartX,
-    event.clientY - dragStartY,
-  );
-  if (distance > 8) didDrag = true;
-  if (!didDrag) return;
-
-  moveGhostTo(event.clientX, event.clientY);
-  const target = document.elementFromPoint(event.clientX, event.clientY);
-  setHoveredCell(target ? target.closest(".cell") : null);
-});
-
-window.addEventListener("pointerup", (event) => {
-  if (!draggedItem) return;
-  endDrag(event.clientX, event.clientY);
-});
-
-window.addEventListener("pointercancel", () => {
-  if (!draggedItem) return;
-  endDrag(dragStartX, dragStartY);
-});
-
-pitchEl.addEventListener("pointerup", (event) => {
-  if (draggedItem || didDrag) return;
-  const cell = event.target.closest(".cell");
-  if (!cell || event.target.closest(".piece") || event.target.closest(".ball")) return;
-  moveSelectedItem(cell);
-});
+  if (getCurrentPlayer(gameState).isAI && !gameState.winner) {
+    setTimeout(runAiStep, 700);
+  }
+}
