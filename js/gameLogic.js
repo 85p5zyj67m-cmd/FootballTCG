@@ -489,6 +489,59 @@ export function getShotInfo(gameState, pieceId) {
   return { legal: true, distance, needed: SHOOT_THRESHOLDS[distance] };
 }
 
+// Ermittelt Schwelle und Modifikatoren fuer einen Schuss - geteilt zwischen
+// der Vorschau (getShotOdds) und der eigentlichen Ausfuehrung (executeShoot),
+// damit beide garantiert dieselbe Rechnung verwenden.
+function computeShotModifiers(gameState, piece, opponentSide, info) {
+  const goalCell = getGoalCell(opponentSide, gameState);
+  const keeper = gameState.pieces.find((p) => p.side === opponentSide && p.role === ROLE.GOALKEEPER);
+  const keeperOnGoal = Boolean(keeper && keeper.row === goalCell.row && keeper.col === goalCell.col);
+  const needed = keeperOnGoal ? info.needed : 2;
+
+  let modifier = 0;
+  const opponentAdjacent = gameState.pieces.some(
+    (p) => p.side !== piece.side && chebyshevDistance(p.row, p.col, piece.row, piece.col) === 1,
+  );
+  if (opponentAdjacent) modifier -= 1;
+
+  const keeperBoosted = gameState.effects.keeperBoostSide === opponentSide;
+  if (keeperBoosted) modifier -= 2;
+
+  return { needed, modifier, keeperOnGoal, opponentAdjacent, keeperBoosted };
+}
+
+// Trefferwahrscheinlichkeit fuer die aktuelle Situation, ohne zu wuerfeln -
+// fuer eine Vorschau in der UI, bevor tatsaechlich geschossen wird.
+export function getShotOdds(gameState, pieceId) {
+  const piece = getPieceById(gameState, pieceId);
+  const info = getShotInfo(gameState, pieceId);
+  if (!info.legal) return { legal: false, blocked: info.blocked };
+
+  const opponentSide = opponentOf(piece.side);
+  const { needed, modifier, keeperOnGoal, opponentAdjacent, keeperBoosted } = computeShotModifiers(
+    gameState,
+    piece,
+    opponentSide,
+    info,
+  );
+
+  let successCount = 1; // natuerliche 6 trifft immer
+  for (let roll = 2; roll <= 5; roll++) {
+    if (roll + modifier >= needed) successCount++;
+  }
+
+  return {
+    legal: true,
+    distance: info.distance,
+    needed,
+    modifier,
+    keeperOnGoal,
+    opponentAdjacent,
+    keeperBoosted,
+    probability: successCount / 6,
+  };
+}
+
 export function getLegalDefenderNudgeCells(gameState, pieceId) {
   const piece = getPieceById(gameState, pieceId);
   if (!piece || piece.position !== "DEF") return [];
@@ -636,28 +689,13 @@ export function executeShoot(gameState, pieceId) {
   }
 
   const opponentSide = opponentOf(piece.side);
-  const goalCell = getGoalCell(opponentSide, gameState);
-
   const roll = 1 + Math.floor(Math.random() * 6);
-  let modifier = 0;
-
-  // Steht der Torwart nicht auf dem Tor (also nicht in der Schusslinie),
-  // ist es praktisch ein leeres Tor: jeder Wurf ueber 1 zaehlt als Treffer.
-  // Steht er dort, gilt weiterhin die distanzabhaengige Schwelle.
-  const keeper = gameState.pieces.find((p) => p.side === opponentSide && p.role === ROLE.GOALKEEPER);
-  const keeperOnGoal = Boolean(keeper && keeper.row === goalCell.row && keeper.col === goalCell.col);
-  const needed = keeperOnGoal ? info.needed : 2;
-
-  const opponentAdjacent = gameState.pieces.some(
-    (p) => p.side !== piece.side && chebyshevDistance(p.row, p.col, piece.row, piece.col) === 1,
+  const { needed, modifier, keeperOnGoal, keeperBoosted } = computeShotModifiers(
+    gameState,
+    piece,
+    opponentSide,
+    info,
   );
-  if (opponentAdjacent) {
-    modifier -= 1;
-  }
-  const keeperBoosted = gameState.effects.keeperBoostSide === opponentSide;
-  if (keeperBoosted) {
-    modifier -= 2;
-  }
 
   let isGoal;
   if (roll === 6) {

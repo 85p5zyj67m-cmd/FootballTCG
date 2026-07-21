@@ -7,6 +7,7 @@ import {
   getLegalTackleTarget,
   getLegalDefenderNudgeCells,
   getShotInfo,
+  getShotOdds,
   executeMove,
   executePass,
   executeTackle,
@@ -91,6 +92,16 @@ function describeShotResult(result) {
   const emptyGoalText = result.keeperOnGoal ? "" : " (Tor unbewacht)";
   const outcomeText = result.outcome === "goal" ? "TOR!" : "Fehlschuss - Torwart haelt den Ball.";
   return `Schuss aus ${result.distance} Feld(ern)${emptyGoalText}, benoetigt ${result.needed}+, gewuerfelt ${result.roll}${modifierText} -> ${outcomeText}`;
+}
+
+function describeShotOdds(odds) {
+  const reasons = [];
+  if (!odds.keeperOnGoal) reasons.push("Tor unbewacht");
+  if (odds.opponentAdjacent) reasons.push("Gegner direkt daneben (-1)");
+  if (odds.keeperBoosted) reasons.push("Torwartparade aktiv (-2)");
+  const reasonsText = reasons.length > 0 ? ` [${reasons.join(", ")}]` : "";
+  const percent = Math.round(odds.probability * 100);
+  return `Trefferchance: ${percent}% - ${odds.distance} Feld(ern) entfernt, benoetigt ${odds.needed}+${reasonsText}`;
 }
 
 function showShotOverlay(result) {
@@ -321,6 +332,12 @@ pitchEl.addEventListener("click", (event) => {
     }
     selectedPieceId = pieceId === selectedPieceId ? null : pieceId;
     actionMode = null;
+    if (selectedPieceId) {
+      const odds = getShotOdds(gameState, selectedPieceId);
+      setMessage(odds.legal ? describeShotOdds(odds) : "Waehle eine Aktion fuer diesen Spieler.");
+    } else {
+      setMessage("Waehle einen deiner Spieler aus.");
+    }
     render();
     return;
   }
