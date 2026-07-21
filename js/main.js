@@ -51,14 +51,32 @@ const shotOverlayEl = document.getElementById("shot-overlay");
 const shotDieEl = document.getElementById("shot-die");
 const shotOutcomeEl = document.getElementById("shot-outcome");
 const shotMetaEl = document.getElementById("shot-meta");
+const historyListEl = document.getElementById("history-list");
 let shotOverlayTimer = null;
 
 let selectedPieceId = null;
 let actionMode = null; // "move" | "pass" | "tackle" | null
 let selectedCard = null; // Handkarte, die gerade ein Ziel braucht
 let cardTargetPieceId = null; // Zwischenschritt fuer Abwehrblock (Spieler gewaehlt, Feld noch offen)
+let historyLog = [];
+
+function renderHistoryList() {
+  historyListEl.innerHTML = "";
+  for (const entry of historyLog) {
+    const li = document.createElement("li");
+    li.textContent = entry;
+    historyListEl.appendChild(li);
+  }
+}
+
+function logHistory(text) {
+  historyLog.unshift(text);
+  if (historyLog.length > 30) historyLog.length = 30;
+  renderHistoryList();
+}
 
 renderPitch(pitchEl, gameState);
+logHistory("Spiel gestartet.");
 render();
 fitPitchToViewport(boardWrapperEl, gameState);
 window.addEventListener("resize", () => fitPitchToViewport(boardWrapperEl, gameState));
@@ -248,7 +266,9 @@ function handleActionResult(result, type) {
     setMessage(FAILURE_MESSAGES[result.reason] || "Aktion nicht moeglich.");
     return;
   }
-  setMessage(describeSuccess(type, result));
+  const text = describeSuccess(type, result);
+  setMessage(text);
+  logHistory(`Du: ${text}`);
   if (type === "shoot") showShotOverlay(result);
   deselect();
   render();
@@ -260,7 +280,9 @@ function handleCardResult(result, card) {
     setMessage(FAILURE_MESSAGES[result.reason] || "Karte konnte nicht gespielt werden.");
     return;
   }
-  setMessage(`Karte gespielt: ${card.name}.`);
+  const text = `Karte gespielt: ${card.name}.`;
+  setMessage(text);
+  logHistory(`Du: ${text}`);
   deselect();
   render();
 }
@@ -370,12 +392,15 @@ endTurnBtn.addEventListener("click", () => {
   endTurnNow(gameState);
   deselect();
   setMessage("Zug beendet.");
+  logHistory("Du: Zug beendet.");
   render();
   maybeTriggerAiTurn();
 });
 newGameBtn.addEventListener("click", () => {
   gameState = createGameState();
   deselect();
+  historyLog = [];
+  logHistory("Neues Spiel gestartet.");
   setMessage("Neues Spiel gestartet.");
   render();
 });
@@ -392,6 +417,7 @@ handEl.addEventListener("click", (event) => {
       return;
     }
     setMessage("Karte abgelegt.");
+    logHistory("Du: Karte abgelegt (Auszeit).");
     render();
     return;
   }
@@ -425,7 +451,9 @@ function runAiStep() {
 
   const cardResult = maybePlayAiCard(gameState, current.side);
   if (cardResult) {
-    setMessage(`KI spielt Karte: ${cardResult.cardName}.`);
+    const cardText = `Karte gespielt: ${cardResult.cardName}.`;
+    setMessage(`KI: ${cardText}`);
+    logHistory(`KI: ${cardText}`);
     render();
     setTimeout(runAiStep, 700);
     return;
@@ -435,11 +463,14 @@ function runAiStep() {
   if (!result.ok) {
     endTurnNow(gameState);
     setMessage("KI konnte keine Aktion ausfuehren, Zug beendet.");
+    logHistory("KI: Zug beendet (keine Aktion moeglich).");
     render();
     return;
   }
 
-  setMessage(`KI: ${describeSuccess(result.type, result)}`);
+  const text = describeSuccess(result.type, result);
+  setMessage(`KI: ${text}`);
+  logHistory(`KI: ${text}`);
   if (result.type === "shoot") showShotOverlay(result);
   render();
 
