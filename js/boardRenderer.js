@@ -61,10 +61,14 @@ export function renderPitch(container, gameState) {
   container.appendChild(goalBottom);
 }
 
-// Berechnet die groesstmoegliche Zellgroesse, mit der das komplette
-// Spielfeld (inkl. beider Tor-Streifen) ohne Scrollen in den verfuegbaren
-// Platz von wrapperEl passt, und setzt sie als CSS-Variable.
+// Berechnet die groesstmoegliche Zellgroesse und setzt sie als CSS-Variable.
+// Auf dem Desktop passt das komplette Spielfeld ohne Scrollen in den
+// verfuegbaren Platz von wrapperEl (Breite UND Hoehe begrenzen). Auf dem
+// Handy (siehe MOBILE_BREAKPOINT, deckt sich mit der CSS-Media-Query) darf
+// die Seite scrollen - dort zaehlt nur die Breite, damit das Feld klar im
+// Fokus bleibt statt auf die Resthoehe zusammengequetscht zu werden.
 const GOAL_DEPTH_RATIO = 0.5;
+const MOBILE_BREAKPOINT = 640;
 
 export function fitPitchToViewport(wrapperEl, gameState) {
   const styles = getComputedStyle(wrapperEl);
@@ -73,13 +77,18 @@ export function fitPitchToViewport(wrapperEl, gameState) {
   const borderWidth = 6; // 2 * 3px Pitch-Rahmen
 
   const availableWidth = wrapperEl.clientWidth - paddingX - borderWidth;
-  const availableHeight = wrapperEl.clientHeight - paddingY - borderWidth;
-
   const rowUnits = gameState.rows + 2 * GOAL_DEPTH_RATIO;
   const cellFromWidth = availableWidth / gameState.cols;
-  const cellFromHeight = availableHeight / rowUnits;
 
-  const cellSize = Math.max(8, Math.floor(Math.min(cellFromWidth, cellFromHeight)));
+  let cellSize;
+  if (window.innerWidth <= MOBILE_BREAKPOINT) {
+    cellSize = cellFromWidth;
+  } else {
+    const availableHeight = wrapperEl.clientHeight - paddingY - borderWidth;
+    const cellFromHeight = availableHeight / rowUnits;
+    cellSize = Math.min(cellFromWidth, cellFromHeight);
+  }
+  cellSize = Math.max(8, Math.floor(cellSize));
 
   document.documentElement.style.setProperty("--cell-size", `${cellSize}px`);
   document.documentElement.style.setProperty("--goal-depth", `${cellSize * GOAL_DEPTH_RATIO}px`);
@@ -147,13 +156,25 @@ export function renderHand(handEl, opponentInfoEl, ownDeckInfoEl, gameState, hum
     tile.disabled = !discardMode && !canPlay;
     tile.dataset.instanceId = card.instanceId;
 
+    const headerEl = document.createElement("span");
+    headerEl.className = "card-header";
     const nameEl = document.createElement("span");
     nameEl.className = "card-name";
     nameEl.textContent = card.name;
+    const typeEl = document.createElement("span");
+    typeEl.className = "card-type";
+    typeEl.textContent = card.category === "offense" ? "OFF" : card.category === "defense" ? "DEF" : "TAK";
+    headerEl.append(nameEl, typeEl);
+
+    const artEl = document.createElement("span");
+    artEl.className = "card-art";
+    artEl.textContent = card.icon;
+
     const descEl = document.createElement("span");
     descEl.className = "card-desc";
     descEl.textContent = card.description;
-    tile.append(nameEl, descEl);
+
+    tile.append(headerEl, artEl, descEl);
 
     handEl.appendChild(tile);
   }

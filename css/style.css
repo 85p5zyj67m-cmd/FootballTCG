@@ -399,24 +399,27 @@ body {
 
 .hand {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
 }
 
+/* Handkarten im Pokemon-Karten-Format: hochkant (~2.5:3.5), Kopfzeile mit
+   Name/Typ, "Artwork"-Feld in der Mitte, Textbox unten. */
 .card {
   flex: 0 0 auto;
-  width: 150px;
-  min-height: 70px;
+  width: 128px;
+  height: 179px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   text-align: left;
-  border-radius: 8px;
-  padding: 8px 10px;
-  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 6px;
+  border: 3px solid transparent;
   cursor: pointer;
   color: #fff;
+  background: #14191d;
 }
 
 .card:disabled {
@@ -424,29 +427,58 @@ body {
   cursor: not-allowed;
 }
 
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+}
+
 .card-name {
+  font-weight: 800;
+  font-size: 0.74rem;
+  line-height: 1.15;
+}
+
+.card-type {
+  font-size: 0.55rem;
   font-weight: 700;
-  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.card-art {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.1rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .card-desc {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   line-height: 1.25;
-  opacity: 0.9;
+  padding: 4px 5px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
 }
 
 .card-offense {
-  background: #5a1f1f;
+  background: #3a1414;
   border-color: #8a2f2f;
 }
 
 .card-defense {
-  background: #1f3a5a;
+  background: #14243a;
   border-color: #2f5a8a;
 }
 
 .card-tactic {
-  background: #1f5a2f;
+  background: #14301c;
   border-color: #2f8a45;
 }
 
@@ -572,6 +604,19 @@ body {
 }
 
 @media (max-width: 640px) {
+  /* Auf dem Handy darf die Seite scrollen - das Spielfeld bekommt dadurch
+     seine volle, breitenbestimmte Groesse statt auf die Resthoehe
+     zusammengequetscht zu werden (siehe fitPitchToViewport). */
+  html, body {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .board-wrapper {
+    flex: 0 0 auto;
+  }
+
   .history-panel {
     padding: 5px 14px;
     gap: 8px;
@@ -663,17 +708,25 @@ body {
   }
 
   .card {
-    width: 128px;
-    min-height: 60px;
-    padding: 6px 8px;
+    width: 108px;
+    height: 151px;
+    padding: 5px;
     scroll-snap-align: start;
   }
 
   .card-name {
-    font-size: 0.82rem;
+    font-size: 0.66rem;
+  }
+
+  .card-type {
+    font-size: 0.5rem;
+  }
+
+  .card-art {
+    font-size: 1.7rem;
   }
 
   .card-desc {
-    font-size: 0.66rem;
+    font-size: 0.56rem;
   }
 }
