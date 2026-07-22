@@ -357,6 +357,37 @@ body {
   background: #5a3232;
 }
 
+.piece-menu {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: #182226;
+  border: 1px solid #3a4a50;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.piece-menu[hidden] {
+  display: none;
+}
+
+.piece-menu-btn {
+  background: #2a373c;
+  color: #f0f0f0;
+  border: 1px solid #3a4a50;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.piece-menu-btn:hover {
+  background: #3a4a50;
+}
+
 .piece.card-target {
   cursor: pointer;
   animation: pulse-target 1s ease-in-out infinite;
@@ -720,25 +751,25 @@ body {
     font-size: 0.8rem;
   }
 
-  .action-buttons {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
   .action-buttons button {
+    width: 100%;
     padding: 10px 6px;
     font-size: 0.82rem;
     text-align: center;
   }
 
   .action-buttons button#end-turn-btn {
-    grid-column: 1 / -1;
     margin-left: 0;
   }
 
-  .action-buttons button#cancel-btn {
-    grid-column: 1 / -1;
+  .piece-menu {
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .piece-menu-btn {
+    padding: 9px 10px;
+    font-size: 0.78rem;
   }
 
   .hand-bar {

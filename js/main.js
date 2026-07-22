@@ -41,12 +41,8 @@ const scoreEl = document.getElementById("score-board");
 const messageEl = document.getElementById("message-line");
 const boardWrapperEl = document.querySelector(".board-wrapper");
 const newGameBtn = document.getElementById("new-game-btn");
-const moveBtn = document.getElementById("move-btn");
-const passBtn = document.getElementById("pass-btn");
-const shootBtn = document.getElementById("shoot-btn");
-const tackleBtn = document.getElementById("tackle-btn");
-const cancelBtn = document.getElementById("cancel-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
+const pieceMenuEl = document.getElementById("piece-menu");
 const handEl = document.getElementById("hand");
 const effectsListEl = document.getElementById("effects-list");
 const opponentHandInfoEl = document.getElementById("opponent-hand-info");
@@ -83,7 +79,17 @@ renderPitch(pitchEl, gameState);
 logHistory("Spiel gestartet.");
 render();
 fitPitchToViewport(boardWrapperEl, gameState);
-window.addEventListener("resize", () => fitPitchToViewport(boardWrapperEl, gameState));
+window.addEventListener("resize", () => {
+  fitPitchToViewport(boardWrapperEl, gameState);
+  render();
+});
+window.addEventListener(
+  "scroll",
+  () => {
+    if (!pieceMenuEl.hidden && selectedPieceId) positionPieceMenu(selectedPieceId);
+  },
+  { passive: true },
+);
 
 function setMessage(text) {
   messageEl.textContent = text;
@@ -236,25 +242,80 @@ function applyHighlights() {
   }
 }
 
-function updateActionBar() {
+const ACTION_LABELS = {
+  move: "Bewegen",
+  pass: "Passen",
+  shoot: "Schiessen",
+  tackle: "Tackeln",
+};
+
+// Ersetzt die frueher immer sichtbare Aktionsleiste: statt fixer Buttons
+// zeigt ein kleines Popup direkt am ausgewaehlten Spieler nur die Aktionen,
+// die dieser Spieler gerade wirklich ausfuehren kann.
+function updatePieceMenu() {
   const current = getCurrentPlayer(gameState);
+  endTurnBtn.disabled = current.isAI || Boolean(gameState.winner) || Boolean(gameState.pendingDiscard);
+
   const piece = selectedPieceId ? getPieceById(gameState, selectedPieceId) : null;
   const isControllable =
     !selectedCard &&
+    !actionMode &&
     piece &&
     !current.isAI &&
     piece.side === current.side &&
     !gameState.winner &&
     !gameState.pendingDiscard;
-  const hasBall = piece && gameState.ball.possessorId === piece.id;
 
-  moveBtn.disabled = !isControllable || getLegalMoveCells(gameState, piece?.id).length === 0;
-  passBtn.disabled =
-    !isControllable || !hasBall || getLegalPassTargets(gameState, piece?.id).length === 0;
-  shootBtn.disabled = !isControllable || !hasBall || !getShotInfo(gameState, piece?.id).legal;
-  tackleBtn.disabled = !isControllable || !getLegalTackleTarget(gameState, piece?.id);
-  cancelBtn.disabled = !selectedPieceId && !selectedCard;
-  endTurnBtn.disabled = current.isAI || Boolean(gameState.winner) || Boolean(gameState.pendingDiscard);
+  if (!isControllable) {
+    pieceMenuEl.hidden = true;
+    return;
+  }
+
+  const hasBall = gameState.ball.possessorId === piece.id;
+  const actions = [];
+  if (getLegalMoveCells(gameState, piece.id).length > 0) actions.push("move");
+  if (hasBall && getLegalPassTargets(gameState, piece.id).length > 0) actions.push("pass");
+  if (hasBall && getShotInfo(gameState, piece.id).legal) actions.push("shoot");
+  if (getLegalTackleTarget(gameState, piece.id)) actions.push("tackle");
+
+  if (actions.length === 0) {
+    pieceMenuEl.hidden = true;
+    return;
+  }
+
+  pieceMenuEl.innerHTML = "";
+  for (const action of actions) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "piece-menu-btn";
+    btn.dataset.action = action;
+    btn.textContent = ACTION_LABELS[action];
+    pieceMenuEl.appendChild(btn);
+  }
+
+  pieceMenuEl.hidden = false;
+  positionPieceMenu(piece.id);
+}
+
+function positionPieceMenu(pieceId) {
+  const pieceEl = pitchEl.querySelector(`.piece[data-piece-id="${pieceId}"]`);
+  if (!pieceEl) {
+    pieceMenuEl.hidden = true;
+    return;
+  }
+
+  const rect = pieceEl.getBoundingClientRect();
+  const gap = 8;
+  const menuWidth = pieceMenuEl.offsetWidth;
+  const menuHeight = pieceMenuEl.offsetHeight;
+
+  let top = rect.top - menuHeight - gap;
+  if (top < 8) top = rect.bottom + gap;
+  let left = rect.left + rect.width / 2 - menuWidth / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+  pieceMenuEl.style.top = `${top}px`;
+  pieceMenuEl.style.left = `${left}px`;
 }
 
 function render() {
@@ -265,7 +326,7 @@ function render() {
   renderHand(handEl, opponentHandInfoEl, ownDeckInfoEl, gameState, HUMAN_SIDE, selectedCard?.instanceId ?? null);
   renderActiveEffects(effectsListEl, gameState);
   applyHighlights();
-  updateActionBar();
+  updatePieceMenu();
 }
 
 function handleActionResult(result, type) {
@@ -375,24 +436,16 @@ pitchEl.addEventListener("click", (event) => {
   render();
 });
 
-moveBtn.addEventListener("click", () => {
-  actionMode = "move";
+pieceMenuEl.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  if (action === "shoot") {
+    handleActionResult(executeShoot(gameState, selectedPieceId), "shoot");
+    return;
+  }
+  actionMode = action;
   render();
-});
-passBtn.addEventListener("click", () => {
-  actionMode = "pass";
-  render();
-});
-tackleBtn.addEventListener("click", () => {
-  actionMode = "tackle";
-  render();
-});
-cancelBtn.addEventListener("click", () => {
-  deselect();
-  render();
-});
-shootBtn.addEventListener("click", () => {
-  handleActionResult(executeShoot(gameState, selectedPieceId), "shoot");
 });
 endTurnBtn.addEventListener("click", () => {
   if (getCurrentPlayer(gameState).isAI || gameState.winner) return;

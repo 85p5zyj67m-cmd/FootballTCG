@@ -28,6 +28,8 @@
     <ul class="history-list" id="history-list"></ul>
   </aside>
 
+  <div class="piece-menu" id="piece-menu" hidden></div>
+
   <div class="shot-overlay" id="shot-overlay" hidden>
     <div class="shot-die" id="shot-die">6</div>
     <div class="shot-outcome" id="shot-outcome">TOR!</div>
@@ -37,11 +39,6 @@
   <footer class="action-bar">
     <div class="message-line" id="message-line">Waehle einen deiner Spieler aus.</div>
     <div class="action-buttons">
-      <button data-action="move" id="move-btn" type="button" disabled>Bewegen</button>
-      <button data-action="pass" id="pass-btn" type="button" disabled>Passen</button>
-      <button data-action="shoot" id="shoot-btn" type="button" disabled>Schiessen</button>
-      <button data-action="tackle" id="tackle-btn" type="button" disabled>Tackeln</button>
-      <button data-action="cancel" id="cancel-btn" type="button" disabled>Abbrechen</button>
       <button data-action="end-turn" id="end-turn-btn" type="button">Zug beenden</button>
     </div>
   </footer>
