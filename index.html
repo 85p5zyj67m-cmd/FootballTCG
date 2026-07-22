@@ -18,6 +18,22 @@
     <div class="pitch" id="pitch"></div>
   </main>
 
+  <section class="hand-bar">
+    <div class="hand-info">
+      <span>Deine Hand (beliebig viele Karten pro Zug spielbar)</span>
+      <span id="own-deck-info">Dein Deck: 0 Karten</span>
+      <span id="opponent-hand-info">Gegner-Hand: 0 Karte(n), Deck: 0</span>
+    </div>
+    <div class="hand" id="hand"></div>
+  </section>
+
+  <footer class="action-bar">
+    <div class="message-line" id="message-line">Waehle einen deiner Spieler aus.</div>
+    <div class="action-buttons">
+      <button data-action="end-turn" id="end-turn-btn" type="button">Zug beenden</button>
+    </div>
+  </footer>
+
   <aside class="effects-panel" id="effects-panel">
     <span class="effects-title">Aktive Effekte:</span>
     <ul class="effects-list" id="effects-list"></ul>
@@ -35,22 +51,6 @@
     <div class="shot-outcome" id="shot-outcome">TOR!</div>
     <div class="shot-meta" id="shot-meta"></div>
   </div>
-
-  <footer class="action-bar">
-    <div class="message-line" id="message-line">Waehle einen deiner Spieler aus.</div>
-    <div class="action-buttons">
-      <button data-action="end-turn" id="end-turn-btn" type="button">Zug beenden</button>
-    </div>
-  </footer>
-
-  <section class="hand-bar">
-    <div class="hand-info">
-      <span>Deine Hand (beliebig viele Karten pro Zug spielbar)</span>
-      <span id="own-deck-info">Dein Deck: 0 Karten</span>
-      <span id="opponent-hand-info">Gegner-Hand: 0 Karte(n), Deck: 0</span>
-    </div>
-    <div class="hand" id="hand"></div>
-  </section>
 
   <script type="module" src="js/main.js"></script>
 </body>
