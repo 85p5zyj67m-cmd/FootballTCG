@@ -5,9 +5,10 @@ import {
   getLegalMoveCells,
   getLegalPassTargets,
   getLegalTackleTarget,
-  getLegalDefenderNudgeCells,
+  getLegalNudgeCells,
   getShotInfo,
   getShotOdds,
+  getActiveEffects,
   executeMove,
   executePass,
   executeTackle,
@@ -26,6 +27,7 @@ import {
   renderTurnIndicator,
   renderScore,
   renderHand,
+  renderActiveEffects,
   fitPitchToViewport,
 } from "./boardRenderer.js";
 
@@ -46,6 +48,7 @@ const tackleBtn = document.getElementById("tackle-btn");
 const cancelBtn = document.getElementById("cancel-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
 const handEl = document.getElementById("hand");
+const effectsListEl = document.getElementById("effects-list");
 const opponentHandInfoEl = document.getElementById("opponent-hand-info");
 const ownDeckInfoEl = document.getElementById("own-deck-info");
 const shotOverlayEl = document.getElementById("shot-overlay");
@@ -102,7 +105,7 @@ const FAILURE_MESSAGES = {
   card_already_played: "Du hast diesen Zug schon eine Karte gespielt.",
   card_not_in_hand: "Karte nicht in der Hand.",
   no_pending_discard: "Kein Ablegen erforderlich.",
-  not_a_defender: "Nur eigene Verteidiger koennen so bewegt werden.",
+  invalid_position: "Diese Karte gilt nicht fuer diese Spielerposition.",
   unknown_card: "Unbekannte Karte.",
 };
 
@@ -186,10 +189,12 @@ function applyHighlights() {
         const el = pitchEl.querySelector(`.piece[data-piece-id="${piece.id}"]`);
         if (el) el.classList.add("card-target");
       }
-    } else if (selectedCard.targetType === "ownDefenderMove") {
+    } else if (selectedCard.targetType === "ownPieceNudge") {
       if (!cardTargetPieceId) {
         for (const piece of gameState.pieces.filter(
-          (p) => p.side === HUMAN_SIDE && p.position === "DEF",
+          (p) =>
+            p.side === HUMAN_SIDE &&
+            (!selectedCard.nudgePosition || p.position === selectedCard.nudgePosition),
         )) {
           const el = pitchEl.querySelector(`.piece[data-piece-id="${piece.id}"]`);
           if (el) el.classList.add("card-target");
@@ -197,7 +202,7 @@ function applyHighlights() {
       } else {
         const pieceEl = pitchEl.querySelector(`.piece[data-piece-id="${cardTargetPieceId}"]`);
         if (pieceEl) pieceEl.classList.add("selected");
-        for (const cell of getLegalDefenderNudgeCells(gameState, cardTargetPieceId)) {
+        for (const cell of getLegalNudgeCells(gameState, cardTargetPieceId, selectedCard.nudgeRadius ?? 1)) {
           const cellEl = pitchEl.querySelector(
             `.cell[data-row="${cell.row}"][data-col="${cell.col}"]`,
           );
@@ -258,6 +263,7 @@ function render() {
   renderTurnIndicator(turnIndicatorEl, gameState);
   renderScore(scoreEl, gameState);
   renderHand(handEl, opponentHandInfoEl, ownDeckInfoEl, gameState, HUMAN_SIDE, selectedCard?.instanceId ?? null);
+  renderActiveEffects(effectsListEl, gameState);
   applyHighlights();
   updateActionBar();
 }
@@ -306,7 +312,7 @@ pitchEl.addEventListener("click", (event) => {
       );
       return;
     }
-    if (selectedCard.targetType === "ownDefenderMove") {
+    if (selectedCard.targetType === "ownPieceNudge") {
       if (!cardTargetPieceId && pieceEl && pieceEl.classList.contains("card-target")) {
         cardTargetPieceId = pieceEl.dataset.pieceId;
         render();

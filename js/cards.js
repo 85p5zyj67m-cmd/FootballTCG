@@ -56,7 +56,50 @@ export const CARD_DEFINITIONS = [
     category: "defense",
     icon: "🛡️",
     description: "Bewege sofort einen eigenen Verteidiger um 1 Feld.",
-    targetType: "ownDefenderMove",
+    targetType: "ownPieceNudge",
+    nudgePosition: "DEF",
+    nudgeRadius: 1,
+  },
+  {
+    cardId: "sturmlauf",
+    name: "Sturmlauf",
+    category: "offense",
+    icon: "🏃",
+    description: "Bewege sofort einen eigenen Stuermer um 1 Feld.",
+    targetType: "ownPieceNudge",
+    nudgePosition: "FWD",
+    nudgeRadius: 1,
+  },
+  {
+    cardId: "mittelfeldwechsel",
+    name: "Mittelfeldwechsel",
+    category: "tactic",
+    icon: "🔄",
+    description: "Bewege sofort einen eigenen Mittelfeldspieler um 1 Feld.",
+    targetType: "ownPieceNudge",
+    nudgePosition: "MID",
+    nudgeRadius: 1,
+  },
+  {
+    cardId: "torwartsprung",
+    name: "Torwartsprung",
+    category: "defense",
+    icon: "🥅",
+    description: "Bewege sofort deinen Torwart um 1 Feld.",
+    targetType: "ownPieceNudge",
+    nudgePosition: "GK",
+    nudgeRadius: 1,
+  },
+  {
+    cardId: "freilaufen",
+    name: "Freilaufen",
+    category: "offense",
+    icon: "💫",
+    description: "Bewege sofort einen beliebigen eigenen Spieler um bis zu 2 Felder.",
+    targetType: "ownPieceNudge",
+    nudgePosition: null,
+    nudgeRadius: 2,
+    copies: 1,
   },
   {
     cardId: "torwartparade",
@@ -109,11 +152,13 @@ export function shuffle(array) {
   return copy;
 }
 
-// Baut ein frisch gemischtes 24-Karten-Deck (2 Kopien je Kartentyp).
+// Baut ein frisch gemischtes Deck (2 Kopien je Kartentyp, sofern nicht per
+// def.copies abweichend festgelegt - z.B. fuer besonders starke Karten).
 export function buildDeck() {
   const cards = [];
   for (const def of CARD_DEFINITIONS) {
-    for (let copy = 1; copy <= 2; copy++) {
+    const copies = def.copies ?? 2;
+    for (let copy = 1; copy <= copies; copy++) {
       cards.push({ ...def, instanceId: `${def.cardId}-${copy}` });
     }
   }

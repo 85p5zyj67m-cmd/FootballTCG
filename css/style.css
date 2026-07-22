@@ -559,6 +559,49 @@ body {
   }
 }
 
+.effects-panel {
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 32px;
+  background: #1c1530;
+  border-top: 1px solid #3a2a5a;
+  overflow: hidden;
+}
+
+.effects-title {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #c98cff;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.effects-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: #e6d6ff;
+  flex: 1;
+  min-width: 0;
+}
+
+.effects-list li {
+  flex-shrink: 0;
+}
+
+.effects-list li.effects-empty {
+  color: #8fa0a6;
+}
+
 .history-panel {
   width: 100%;
   flex: 0 0 auto;
@@ -617,15 +660,18 @@ body {
     flex: 0 0 auto;
   }
 
+  .effects-panel,
   .history-panel {
     padding: 5px 14px;
     gap: 8px;
   }
 
+  .effects-title,
   .history-title {
     font-size: 0.62rem;
   }
 
+  .effects-list,
   .history-list {
     font-size: 0.68rem;
     gap: 12px;

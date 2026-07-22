@@ -1,7 +1,7 @@
 // Spielseitenlayout: erzeugt und aktualisiert das DOM auf Basis des
 // Spielzustands aus gameLogic.js. Enthaelt selbst keine Spielregeln.
 
-import { SIDE, GOAL_COLUMN, ACTIONS_PER_TURN, getCurrentPlayer } from "./gameLogic.js";
+import { SIDE, GOAL_COLUMN, ACTIONS_PER_TURN, getCurrentPlayer, getActiveEffects } from "./gameLogic.js";
 
 function addPitchMarking(container, className) {
   const marking = document.createElement("div");
@@ -138,6 +138,25 @@ export function renderTurnIndicator(el, gameState) {
 
 export function renderScore(el, gameState) {
   el.textContent = `Unten ${gameState.score[SIDE.BOTTOM]} : ${gameState.score[SIDE.TOP]} Oben`;
+}
+
+export function renderActiveEffects(el, gameState) {
+  el.innerHTML = "";
+  const effects = getActiveEffects(gameState);
+
+  if (effects.length === 0) {
+    const li = document.createElement("li");
+    li.className = "effects-empty";
+    li.textContent = "Keine aktiven Karteneffekte.";
+    el.appendChild(li);
+    return;
+  }
+
+  for (const text of effects) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    el.appendChild(li);
+  }
 }
 
 export function renderHand(handEl, opponentInfoEl, ownDeckInfoEl, gameState, humanSide, selectedInstanceId) {

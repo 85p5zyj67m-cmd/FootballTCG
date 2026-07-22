@@ -1,7 +1,9 @@
 // Reine Spiellogik & Zustand - keine DOM-Zugriffe hier.
 // Regeln entsprechend "Football TCG - Prototyp Regeln v0.1" + Aktionskarten.
 
-import { buildDeck, shuffle } from "./cards.js";
+import { buildDeck, shuffle, CARD_DEFINITIONS } from "./cards.js";
+
+const CARD_BY_ID = Object.fromEntries(CARD_DEFINITIONS.map((def) => [def.cardId, def]));
 
 export const BOARD_COLS = 9;
 export const BOARD_ROWS = 14;
@@ -64,8 +66,9 @@ const FORMATION_BY_SIDE = {
   ],
 };
 
-// Positions-Tag je Reihen-Linie - nur fuer die Karte "Abwehrblock" (muss
-// einen "eigenen Verteidiger" erkennen koennen), sonst ungenutzt.
+// Positions-Tag je Reihen-Linie - wird von den "Nudge"-Karten (Abwehrblock,
+// Sturmlauf, Mittelfeldwechsel, Torwartsprung) genutzt, um die passende
+// Zielposition (DEF/MID/FWD/GK) zu erkennen, sonst ungenutzt.
 function positionForRow(side, row) {
   if (side === SIDE.TOP) {
     if (row === 1) return "GK";
@@ -207,7 +210,7 @@ function resetFormationsAndKickoff(gameState, kickoffSide) {
 // Bewegung in diesem Zug neben dem gegnerischen Ballfuehrer stand - diese
 // Momentaufnahme wird bei Zugbeginn (und nach einem Tor-Reset) erstellt und
 // verliert eine Figur, sobald sie sich in diesem Zug bewegt (siehe
-// executeMove/executeDefenderNudge). Graetsche hebt die Einschraenkung auf.
+// executeMove/executePieceNudge). Graetsche hebt die Einschraenkung auf.
 function computeTackleEligiblePieceIds(gameState, side) {
   const carrierId = gameState.ball.possessorId;
   if (!carrierId) return [];
@@ -542,18 +545,26 @@ export function getShotOdds(gameState, pieceId) {
   };
 }
 
-export function getLegalDefenderNudgeCells(gameState, pieceId) {
+// Verallgemeinerte Version des "Abwehrblock"-Bewegungsmusters: jede Karte,
+// die eine Figur sofort und kostenlos um `radius` Felder bewegt (Abwehrblock,
+// Sturmlauf, Mittelfeldwechsel, Torwartsprung, Freilaufen), nutzt dieselbe
+// Zellauswahl - nur der Radius unterscheidet sich.
+export function getLegalNudgeCells(gameState, pieceId, radius = 1) {
   const piece = getPieceById(gameState, pieceId);
-  if (!piece || piece.position !== "DEF") return [];
+  if (!piece) return [];
 
   const results = [];
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const row = piece.row + dr;
-      const col = piece.col + dc;
+  for (let row = piece.row - radius; row <= piece.row + radius; row++) {
+    for (let col = piece.col - radius; col <= piece.col + radius; col++) {
+      if (row === piece.row && col === piece.col) continue;
       if (!isCellOnBoard(row, col, gameState)) continue;
+      if (chebyshevDistance(piece.row, piece.col, row, col) > radius) continue;
       if (getPiecesAtCell(gameState, row, col).length >= MAX_PIECES_PER_CELL) continue;
+
+      const line = getLineCells(piece.row, piece.col, row, col).slice(1, -1);
+      const blocked = line.some((c) => getPiecesAtCell(gameState, c.row, c.col).length > 0);
+      if (blocked) continue;
+
       results.push({ row, col });
     }
   }
@@ -728,16 +739,21 @@ export function executeShoot(gameState, pieceId) {
   };
 }
 
-// Karte "Abwehrblock": bewegt eine Figur um genau 1 Feld, komplett kostenlos
-// (zaehlt weder als reguraere noch als Bonus-Aktion).
-export function executeDefenderNudge(gameState, pieceId, row, col) {
+// Bewegt eine Figur sofort um bis zu `radius` Felder, komplett kostenlos
+// (zaehlt weder als reguraere noch als Bonus-Aktion) - Basis fuer alle
+// "Nudge"-Karten (Abwehrblock, Sturmlauf, Mittelfeldwechsel, Torwartsprung,
+// Freilaufen). `allowedPosition` (DEF/MID/FWD/GK) schraenkt optional ein,
+// welche Position die Zielfigur haben muss; null erlaubt jede Position.
+export function executePieceNudge(gameState, pieceId, row, col, { radius = 1, allowedPosition = null } = {}) {
   if (gameState.winner) return { ok: false, reason: "game_over" };
   const piece = getPieceById(gameState, pieceId);
   if (!piece) return { ok: false, reason: "not_found" };
   if (piece.side !== getCurrentPlayer(gameState).side) return { ok: false, reason: "not_your_turn" };
-  if (piece.position !== "DEF") return { ok: false, reason: "not_a_defender" };
+  if (allowedPosition && piece.position !== allowedPosition) {
+    return { ok: false, reason: "invalid_position" };
+  }
 
-  const legalCells = getLegalDefenderNudgeCells(gameState, pieceId);
+  const legalCells = getLegalNudgeCells(gameState, pieceId, radius);
   if (!legalCells.some((c) => c.row === row && c.col === col)) {
     return { ok: false, reason: "illegal_move" };
   }
@@ -762,6 +778,20 @@ export function executeDefenderNudge(gameState, pieceId, row, col) {
 // --- Karten spielen ---
 
 function applyCardEffect(gameState, side, card, target) {
+  if (card.targetType === "ownPieceNudge") {
+    if (!target || target.row == null || target.col == null) {
+      return { ok: false, reason: "invalid_target" };
+    }
+    const piece = getPieceById(gameState, target.pieceId);
+    if (!piece || piece.side !== side) {
+      return { ok: false, reason: "invalid_target" };
+    }
+    return executePieceNudge(gameState, piece.id, target.row, target.col, {
+      radius: card.nudgeRadius ?? 1,
+      allowedPosition: card.nudgePosition ?? null,
+    });
+  }
+
   switch (card.cardId) {
     case "sprint": {
       const piece = target && getPieceById(gameState, target.pieceId);
@@ -784,16 +814,6 @@ function applyCardEffect(gameState, side, card, target) {
       if (!piece || piece.side === side) return { ok: false, reason: "invalid_target" };
       gameState.effects.pressedPieceIds.push(piece.id);
       return { ok: true };
-    }
-    case "abwehrblock": {
-      if (!target || target.row == null || target.col == null) {
-        return { ok: false, reason: "invalid_target" };
-      }
-      const piece = getPieceById(gameState, target.pieceId);
-      if (!piece || piece.side !== side || piece.position !== "DEF") {
-        return { ok: false, reason: "invalid_target" };
-      }
-      return executeDefenderNudge(gameState, piece.id, target.row, target.col);
     }
     case "doppelpass":
       gameState.effects.doppelpassArmed = true;
@@ -853,6 +873,56 @@ export function resolveAuszeitDiscard(gameState, side, instanceId) {
   pile.discard.push(discarded);
   gameState.pendingDiscard = null;
   return { ok: true };
+}
+
+// Liefert eine fuer die UI lesbare Liste aller aktuell aktiven Karteneffekte
+// (beider Seiten) - rein lesend, fuer eine "was wirkt gerade"-Anzeige.
+export function getActiveEffects(gameState) {
+  const effects = gameState.effects;
+  const currentSideLabel = sideLabel(getCurrentPlayer(gameState).side);
+  const list = [];
+
+  for (const id of effects.extraMovementPieceIds) {
+    list.push(`${CARD_BY_ID.sprint.icon} Sprint auf ${pieceLabel(gameState, id)}: +2 Bewegung diesen Zug`);
+  }
+  for (const id of effects.extraRangePieceIds) {
+    list.push(`${CARD_BY_ID.fernschuss.icon} Fernschuss auf ${pieceLabel(gameState, id)}: Schussreichweite +1`);
+  }
+  if (effects.doppelpassArmed) {
+    list.push(`${CARD_BY_ID.doppelpass.icon} Doppelpass (${currentSideLabel}): naechster Pass gewaehrt sofort einen weiteren`);
+  }
+  if (effects.steilpassArmed) {
+    list.push(`${CARD_BY_ID.steilpass.icon} Steilpass (${currentSideLabel}): naechster Pass ignoriert 1 Gegner auf der Linie`);
+  }
+  if (effects.seitenwechselArmed) {
+    list.push(`${CARD_BY_ID.seitenwechsel.icon} Seitenwechsel (${currentSideLabel}): naechster Pass ohne Reichweitenlimit`);
+  }
+  if (effects.graetscheArmed) {
+    list.push(`${CARD_BY_ID.graetsche.icon} Graetsche (${currentSideLabel}): naechstes Tackling aus bis zu 2 Feldern`);
+  }
+  if (effects.konterArmed) {
+    list.push(`${CARD_BY_ID.konter.icon} Konter (${currentSideLabel}): Extra-Aktion nach naechstem erfolgreichen Tackling`);
+  }
+  for (const id of effects.pressedPieceIds) {
+    list.push(`${CARD_BY_ID.pressing.icon} Pressing auf ${pieceLabel(gameState, id)}: naechster Zug nur 1 Feld Bewegung`);
+  }
+  if (effects.keeperBoostSide) {
+    list.push(
+      `${CARD_BY_ID.torwartparade.icon} Torwartparade (${sideLabel(effects.keeperBoostSide)}): Torwart +2 Schussabwehr beim naechsten Schuss`,
+    );
+  }
+
+  return list;
+}
+
+function sideLabel(side) {
+  return side === SIDE.BOTTOM ? "Unten" : "Oben";
+}
+
+function pieceLabel(gameState, pieceId) {
+  const piece = getPieceById(gameState, pieceId);
+  if (!piece) return "?";
+  return `${sideLabel(piece.side)} #${piece.id.split("-")[1]}`;
 }
 
 export { chebyshevDistance, getGoalCell };
